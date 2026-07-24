@@ -1,0 +1,533 @@
+{
+  "name": "P2-01 Inbox Intake",
+  "nodes": [
+    {
+      "parameters": {
+        "pollingTimes": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 10
+            }
+          ]
+        },
+        "format": "full",
+        "postProcessAction": "markAsRead",
+        "options": {}
+      },
+      "id": "p2-intake-gmail-trigger",
+      "name": "Gmail Inbox",
+      "type": "n8n-nodes-base.gmailTrigger",
+      "typeVersion": 2,
+      "position": [
+        -700,
+        0
+      ],
+      "notes": "Canonical inbox adapter = Gmail trigger (credentials required after import). IMAP is a swappable adapter: replace this node with n8n-nodes-base.emailReadImap (host/port/SSL/user/app-password) and keep the rest of the flow; the Normalize node handles both Gmail and IMAP field shapes."
+    },
+    {
+      "parameters": {
+        "jsCode": "const out = [];\nfor (const item of $input.all()) {\n  const j = item.json;\n  const rawFrom = String(j.from || j.fromEmail || (j.headers && j.headers.from) || '');\n  const m = rawFrom.match(/^(.*?)\\s*<(.+?)>\\s*$/);\n  const from_name = m ? m[1].replace(/^\"|\"$/g, '').trim() : String(j.fromName || rawFrom).trim();\n  const from_email = (m ? m[2] : rawFrom).trim().toLowerCase();\n  const mailbox = String(j.label || j.mailbox || 'INBOX');\n  const message_id = String(j.messageId || j.id || (j.headers && j.headers['message-id']) || '');\n  const thread_id = String(j.threadId || j.thread_id || '') || null;\n  const toRaw = j.to || j.toEmail || '';\n  const to = Array.isArray(toRaw) ? toRaw.map(String) : String(toRaw).split(',').map(s => s.trim()).filter(Boolean);\n  const htmlBody = String(j.textHtml || j.html || '');\n  const textBody = String(j.textPlain || j.text || '');\n  let body = textBody || htmlBody;\n  body = body.replace(/<style[\\s\\S]*?<\\/style>/gi, ' ').replace(/<script[\\s\\S]*?<\\/script>/gi, ' ');\n  body = body.replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '\"').replace(/&#39;/g, \"'\");\n  body = body.split(/\\n\\s*On .*wrote:/i)[0];\n  body = body.split(/\\n\\s*-{2,}\\s*\\n/)[0];\n  body = body.replace(/\\s+/g, ' ').trim();\n  const MAX_BODY = 16000;\n  const bodyTruncated = body.length > MAX_BODY;\n  if (bodyTruncated) body = body.slice(0, MAX_BODY);\n  const attachments = Array.isArray(j.attachments) ? j.attachments : [];\n  const attachment_metadata = attachments.map(a => ({ filename: String(a.filename || a.name || ''), mimeType: String(a.mimeType || a.type || ''), size: Number(a.size || 0) }));\n  const MAX_ATTACH = 10485760;\n  const oversized_attachments = attachment_metadata.filter(a => a.size > MAX_ATTACH);\n  let h = 0x811c9dc5;\n  for (let i = 0; i < body.length; i++) { h ^= body.charCodeAt(i); h = (h * 0x01000193) >>> 0; }\n  const content_hash = h.toString(16);\n  const idempotency_key = mailbox + ':' + message_id;\n  const hex = () => Math.floor((1 + Math.random()) * 0x100000000).toString(16).slice(1);\n  const correlation_id = hex() + hex() + '-' + hex() + '-' + hex() + '-' + hex() + '-' + hex() + hex() + hex();\n  const received_at = j.receivedDate ? new Date(j.receivedDate).toISOString() : new Date().toISOString();\n  const retention_expires_at = new Date(Date.parse(received_at) + 30 * 86400000).toISOString();\n  const source_link = thread_id ? 'https://mail.google.com/mail/u/0/#inbox/' + thread_id : null;\n  out.push({ json: {\n    correlation_id, idempotency_key, mailbox, message_id, thread_id,\n    from_name, from_email, to, subject: String(j.subject || '(no subject)'),\n    text_body: body, received_at, attachment_metadata, source_link, content_hash,\n    body_truncated: bodyTruncated, oversized_attachments, retention_expires_at\n  }});\n}\nreturn out;"
+      },
+      "id": "p2-intake-normalize",
+      "name": "Normalize & Sanitize Email",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -460,
+        0
+      ],
+      "notes": "Normalizes Gmail/IMAP output to the canonical email contract (section 6.5). HTML is stripped to text, quoted history and signatures are removed where safe, body is capped at 16000 chars, attachments are metadata-only (size capped at 10MB), and the body is treated as UNTRUSTED content. Idempotency key = mailbox:message-id."
+    },
+    {
+      "parameters": {
+        "authentication": "airtableTokenApi",
+        "resource": "record",
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "REPLACE-AIRTABLE-BASE-ID",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "REPLACE-TABLE-ID",
+          "mode": "id"
+        },
+        "filterByFormula": "={{ `{message_id} = \"${$json.message_id}\"` }}",
+        "limit": 1,
+        "options": {},
+        "returnAll": false
+      },
+      "id": "p2-intake-dedup",
+      "name": "Idempotency Check",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        -220,
+        0
+      ],
+      "alwaysOutputData": true,
+      "notes": "Message-ID idempotency: checks email_events by idempotency_key (mailbox:message-id). Duplicates stop here."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ !!$('Idempotency Check').first().json.id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "p2-intake-exists-if",
+      "name": "Already Processed?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        20,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const rec = $('Idempotency Check').first().json || {};\nconst fields = rec.fields || rec;\nreturn [{ json: {\n  outcome: 'duplicate',\n  correlation_id: fields.correlation_id || '',\n  idempotency_key: fields.idempotency_key || '',\n  message_id: fields.message_id || '',\n  processing_status: fields.processing_status || 'received',\n  draft_id: fields.draft_id || '',\n  task_id: fields.task_id || '',\n  message: 'Message already processed; no duplicate draft, task, or alert created.'\n}}];"
+      },
+      "id": "p2-intake-duplicate-stop",
+      "name": "Return Duplicate Stop",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        260,
+        240
+      ],
+      "notes": "Terminal: duplicate delivery creates no duplicate side effects (P2-E2E-005)."
+    },
+    {
+      "parameters": {
+        "jsCode": "const j = $('Normalize & Sanitize Email').item.json;\nconst config = {\n  vip_domains: ['northstar.example', 'acmecorp.example'],\n  vip_senders: ['ceo@northstar.example', 'founder@acmecorp.example'],\n  newsletter_senders: ['newsletter@updates.example', 'no-reply@mailer.example', 'digest@weekly.example'],\n  newsletter_subject_patterns: ['unsubscribe', 'weekly digest', 'newsletter', 'you are invited', 'special offer'],\n  blocked_senders: ['spammer@blocked.example', 'phish@blocked.example']\n};\nconst email = (j.from_email || '').toLowerCase();\nconst subject = (j.subject || '').toLowerCase();\nconst domain = email.split('@')[1] || '';\nlet vip = false, newsletter = false, blocked = false, rule = 'proceed';\nif (config.blocked_senders.includes(email)) { blocked = true; rule = 'blocked'; }\nelse {\n  if (config.vip_senders.includes(email) || config.vip_domains.includes(domain)) vip = true;\n  if (config.newsletter_senders.includes(email) || config.newsletter_subject_patterns.some(p => subject.includes(p))) newsletter = true;\n  if (newsletter) rule = 'newsletter';\n  else if (vip) rule = 'vip';\n}\nreturn [{ json: { ...j, rules: { vip, newsletter, blocked, rule }, proceed: !blocked } }];"
+      },
+      "id": "p2-intake-rules",
+      "name": "Deterministic Rules",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        260,
+        -120
+      ],
+      "notes": "Deterministic rules BEFORE AI: VIP sender/domain, newsletter/promotion, and blocked-sender classification. Blocked senders stop; newsletter and VIP labels are passed to the triage core. Config lives in this Code node (swappable per client)."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.proceed }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "p2-intake-proceed-if",
+      "name": "Proceed to Triage?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        500,
+        -120
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "airtableTokenApi",
+        "resource": "record",
+        "operation": "create",
+        "base": {
+          "__rl": true,
+          "value": "REPLACE-AIRTABLE-BASE-ID",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "REPLACE-TABLE-ID",
+          "mode": "id"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "message_id": "={{ $('Deterministic Rules').item.json.message_id }}",
+            "mailbox": "={{ $('Deterministic Rules').item.json.mailbox }}",
+            "thread_id": "={{ $('Deterministic Rules').item.json.thread_id }}",
+            "received_at": "={{ $('Deterministic Rules').item.json.received_at }}",
+            "content_hash": "={{ $('Deterministic Rules').item.json.content_hash }}",
+            "processing_status": "blocked",
+            "retention_expires_at": "={{ $('Deterministic Rules').item.json.retention_expires_at }}",
+            "last_error_code": "blocked_sender"
+          },
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      },
+      "id": "p2-intake-write-blocked",
+      "name": "Write Blocked Event",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        740,
+        120
+      ],
+      "notes": "Blocked sender: audited and stopped. No triage, draft, task, or alert."
+    },
+    {
+      "parameters": {
+        "authentication": "airtableTokenApi",
+        "resource": "record",
+        "operation": "create",
+        "base": {
+          "__rl": true,
+          "value": "REPLACE-AIRTABLE-BASE-ID",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "REPLACE-TABLE-ID",
+          "mode": "id"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "message_id": "={{ $('Deterministic Rules').item.json.message_id }}",
+            "mailbox": "={{ $('Deterministic Rules').item.json.mailbox }}",
+            "thread_id": "={{ $('Deterministic Rules').item.json.thread_id }}",
+            "received_at": "={{ $('Deterministic Rules').item.json.received_at }}",
+            "content_hash": "={{ $('Deterministic Rules').item.json.content_hash }}",
+            "processing_status": "received",
+            "retention_expires_at": "={{ $('Deterministic Rules').item.json.retention_expires_at }}"
+          },
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      },
+      "id": "p2-intake-write-event",
+      "name": "Write email_events",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        740,
+        -240
+      ],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "notes": "Writes the email_events record with processing_status: received before triage. The record id flows forward as email_event_id."
+    },
+    {
+      "parameters": {
+        "jsCode": "const ev = $('Write email_events').first().json || {};\nconst j = $('Deterministic Rules').item.json;\nreturn [{ json: {\n  correlation_id: j.correlation_id,\n  idempotency_key: j.idempotency_key,\n  email_event_id: ev.id || '',\n  mailbox: j.mailbox,\n  message_id: j.message_id,\n  thread_id: j.thread_id,\n  from_name: j.from_name,\n  from_email: j.from_email,\n  to: j.to,\n  subject: j.subject,\n  text_body: j.text_body,\n  received_at: j.received_at,\n  attachment_metadata: j.attachment_metadata,\n  source_link: j.source_link,\n  rules: j.rules\n}}];"
+      },
+      "id": "p2-intake-prep-triage",
+      "name": "Prepare Triage Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        980,
+        -240
+      ]
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "REPLACE-SUBWORKFLOW-ID",
+          "mode": "id",
+          "cachedResultName": "P2-02 AI Triage and Draft Core"
+        },
+        "mode": "each",
+        "options": {}
+      },
+      "id": "p2-intake-call-triage",
+      "name": "Call Triage Core",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.1,
+      "position": [
+        1220,
+        -240
+      ],
+      "notes": "After import, bind this node to P2-02 AI Triage and Draft Core workflow ID. The public export uses a placeholder workflow ID."
+    },
+    {
+      "parameters": {
+        "jsCode": "const email = $('Prepare Triage Input').item.json;\nconst triage = $input.first().json || {};\nreturn [{ json: {\n  ...email,\n  triage: {\n    review_required: !!triage.review_required,\n    gate_reason: triage.gate_reason || '',\n    category: triage.category || '',\n    importance: triage.importance || '',\n    needs_reply: !!triage.needs_reply,\n    needs_task: !!triage.needs_task,\n    summary: triage.summary || '',\n    draft_reply: triage.draft_reply || '',\n    suggested_due_at: triage.suggested_due_at || null,\n    confidence: triage.confidence,\n    sensitive: !!triage.sensitive,\n    safety_reason: triage.safety_reason || null,\n    review_queue_id: triage.review_queue_id || ''\n  }\n}}];"
+      },
+      "id": "p2-intake-build-handoff",
+      "name": "Build Handoff Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1460,
+        -240
+      ]
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "REPLACE-SUBWORKFLOW-ID",
+          "mode": "id",
+          "cachedResultName": "P2-03 Review and Task Handoff"
+        },
+        "mode": "each",
+        "options": {}
+      },
+      "id": "p2-intake-call-handoff",
+      "name": "Call Review & Task Handoff",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.1,
+      "position": [
+        1700,
+        -240
+      ],
+      "notes": "After import, bind this node to P2-03 Review and Task Handoff workflow ID. Called for every triaged message (accepted and review_required); P2-03 decides which side effects to create. The public export uses a placeholder workflow ID."
+    },
+    {
+      "parameters": {
+        "authentication": "airtableTokenApi",
+        "resource": "record",
+        "operation": "update",
+        "base": {
+          "__rl": true,
+          "value": "REPLACE-AIRTABLE-BASE-ID",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "REPLACE-TABLE-ID",
+          "mode": "id"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "category": "={{ $('Call Triage Core').item.json.category }}",
+            "importance": "={{ $('Call Triage Core').item.json.importance }}",
+            "confidence": "={{ $('Call Triage Core').item.json.confidence }}",
+            "processing_status": "={{ $('Call Triage Core').item.json.review_required ? 'review_required' : 'triaged' }}",
+            "draft_id": "={{ $('Call Review & Task Handoff').item.json.draft_id || '' }}",
+            "task_id": "={{ $('Call Review & Task Handoff').item.json.task_id || '' }}",
+            "last_error_code": "={{ $('Call Review & Task Handoff').item.json.task_error_code || '' }}",
+            "id": "={{ $json.email_event_id }}"
+          },
+          "matchingColumns": [
+            "id"
+          ],
+          "schema": []
+        },
+        "options": {}
+      },
+      "id": "p2-intake-update-event",
+      "name": "Update email_events Final State",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        1940,
+        -240
+      ],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "notes": "Updates email_events with triage category/importance/confidence, handoff draft_id/task_id, and final processing_status. External-write states (draft_id, task_id) are written only after the handoff returns."
+    },
+    {
+      "parameters": {
+        "jsCode": "const email = $('Prepare Triage Input').item.json;\nconst triage = $('Call Triage Core').first().json || {};\nconst handoff = $('Call Review & Task Handoff').first().json || {};\nreturn [{ json: {\n  correlation_id: email.correlation_id,\n  idempotency_key: email.idempotency_key,\n  message_id: email.message_id,\n  email_event_id: email.email_event_id,\n  outcome: triage.review_required ? 'review_required' : 'processed',\n  category: triage.category || '',\n  importance: triage.importance || '',\n  needs_reply: !!triage.needs_reply,\n  needs_task: !!triage.needs_task,\n  sensitive: !!triage.sensitive,\n  confidence: triage.confidence,\n  draft_id: handoff.draft_id || '',\n  task_id: handoff.task_id || '',\n  task_status: handoff.task_status || '',\n  alert_sent: !!handoff.alert_sent,\n  review_queue_id: triage.review_queue_id || handoff.review_queue_id || '',\n  final_status: triage.review_required ? 'review_required_no_auto_send' : 'handoff_complete'\n}}];"
+      },
+      "id": "p2-intake-final",
+      "name": "Final Intake Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2180,
+        -240
+      ]
+    }
+  ],
+  "connections": {
+    "Gmail Inbox": {
+      "main": [
+        [
+          {
+            "node": "Normalize & Sanitize Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize & Sanitize Email": {
+      "main": [
+        [
+          {
+            "node": "Idempotency Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Idempotency Check": {
+      "main": [
+        [
+          {
+            "node": "Already Processed?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Already Processed?": {
+      "main": [
+        [
+          {
+            "node": "Return Duplicate Stop",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Deterministic Rules",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Deterministic Rules": {
+      "main": [
+        [
+          {
+            "node": "Proceed to Triage?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Proceed to Triage?": {
+      "main": [
+        [
+          {
+            "node": "Write email_events",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Write Blocked Event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Write email_events": {
+      "main": [
+        [
+          {
+            "node": "Prepare Triage Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Triage Input": {
+      "main": [
+        [
+          {
+            "node": "Call Triage Core",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Triage Core": {
+      "main": [
+        [
+          {
+            "node": "Build Handoff Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Handoff Input": {
+      "main": [
+        [
+          {
+            "node": "Call Review & Task Handoff",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Review & Task Handoff": {
+      "main": [
+        [
+          {
+            "node": "Update email_events Final State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update email_events Final State": {
+      "main": [
+        [
+          {
+            "node": "Final Intake Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "errorWorkflow": "REPLACE-SHARED-ERROR-WORKFLOW-ID"
+  },
+  "active": false
+}

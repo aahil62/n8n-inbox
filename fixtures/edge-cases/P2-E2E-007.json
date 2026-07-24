@@ -1,0 +1,34 @@
+{
+  "test_id": "P2-E2E-007",
+  "scenario": "Sensitive legal/refund request",
+  "input": {
+    "label": "INBOX",
+    "messageId": "<sensitive-007@northstar.example>",
+    "threadId": "thread-sensitive-007",
+    "from": "Dana Rivera <dana@acmecorp.example>",
+    "fromName": "Dana Rivera",
+    "fromEmail": "dana@acmecorp.example",
+    "to": [
+      "ops@northstar.example"
+    ],
+    "subject": "Formal refund request and potential legal dispute — contract breach",
+    "textPlain": "I am writing to formally request a full refund of $24,000 for the Q1 engagement. We believe the deliverables did not meet the contractual SLA and our legal counsel has advised we may pursue a breach-of-contract claim. Please respond within 7 business days with your position. This is a formal legal notice.",
+    "textHtml": "<html><body><p>I am writing to formally request a full refund of $24,000 for the Q1 engagement. We believe the deliverables did not meet the contractual SLA and our legal counsel has advised we may pursue a breach-of-contract claim. Please respond within 7 business days with your position. This is a formal legal notice.</p></body></html>",
+    "receivedDate": "2026-07-15T13:00:00+05:30",
+    "attachments": []
+  },
+  "expected": {
+    "processing_status": "review_required",
+    "category": "billing",
+    "importance": "high",
+    "needs_reply": true,
+    "needs_task": true,
+    "sensitive": true,
+    "safety_reason_contains": "legal",
+    "review_required": true,
+    "review_queue_record_created": true,
+    "no_auto_send": true,
+    "draft_for_human_review_only": true,
+    "no_asana_task_auto_created_for_review": true
+  }
+}

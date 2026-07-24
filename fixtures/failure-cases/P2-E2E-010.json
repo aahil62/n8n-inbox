@@ -1,0 +1,31 @@
+{
+  "test_id": "P2-E2E-010",
+  "scenario": "LLM timeout or invalid schema",
+  "input": {
+    "label": "INBOX",
+    "messageId": "<llm-timeout-010@northstar.example>",
+    "threadId": "thread-llm-timeout-010",
+    "from": "Jordan Lee <jordan@globex.example>",
+    "fromName": "Jordan Lee",
+    "fromEmail": "jordan@globex.example",
+    "to": [
+      "ops@northstar.example"
+    ],
+    "subject": "Can we reschedule our strategy session?",
+    "textPlain": "Hi, something came up and I need to move our strategy session from Wednesday to next Monday. Does 2pm IST work? Let me know.",
+    "textHtml": "<html><body><p>Hi, something came up and I need to move our strategy session from Wednesday to next Monday. Does 2pm IST work? Let me know.</p></body></html>",
+    "receivedDate": "2026-07-15T11:30:00+05:30",
+    "attachments": []
+  },
+  "instructions": "Force the OpenAI node to time out or return malformed JSON (e.g. disconnect the credential or use an invalid model). Then replay with the same messageId after restoring the model.",
+  "expected": {
+    "routes_to_review": true,
+    "review_queue_record_created": true,
+    "no_draft_created": true,
+    "no_task_created": true,
+    "no_auto_send": true,
+    "processing_status": "review_required",
+    "gate_reason": "llm_timeout_or_malformed or malformed_output",
+    "replay_creates_no_duplicate": true
+  }
+}

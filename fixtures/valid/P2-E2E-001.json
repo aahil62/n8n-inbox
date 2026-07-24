@@ -1,0 +1,33 @@
+{
+  "test_id": "P2-E2E-001",
+  "scenario": "Urgent client request",
+  "input": {
+    "label": "INBOX",
+    "messageId": "<urgent-001@northstar.example>",
+    "threadId": "thread-urgent-001",
+    "from": "Priya Sharma <priya@acmecorp.example>",
+    "fromName": "Priya Sharma",
+    "fromEmail": "priya@acmecorp.example",
+    "to": [
+      "ops@northstar.example"
+    ],
+    "subject": "URGENT: Production site is down — needs immediate fix",
+    "textPlain": "Hi team, our production website at the Acme launch is returning 500 errors for all users since 10 minutes ago. We have a customer demo in one hour. Please investigate and fix immediately. This is blocking revenue.",
+    "textHtml": "<html><body><p>Hi team, our production website at the Acme launch is returning 500 errors for all users since 10 minutes ago. We have a customer demo in one hour. Please investigate and fix immediately. This is blocking revenue.</p></body></html>",
+    "receivedDate": "2026-07-15T09:12:00+05:30",
+    "attachments": []
+  },
+  "expected": {
+    "processing_status": "triaged",
+    "category": "client_request",
+    "importance": "high",
+    "needs_reply": true,
+    "needs_task": true,
+    "sensitive": false,
+    "draft_created": true,
+    "task_created": true,
+    "urgent_alert_sent": true,
+    "review_required": false,
+    "no_duplicate_on_replay": true
+  }
+}

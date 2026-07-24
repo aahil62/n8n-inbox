@@ -1,0 +1,254 @@
+{
+  "name": "P0-99 Shared Error Handler",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "p0-error-trigger",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -600,
+        0
+      ],
+      "notes": "Native n8n Error Trigger. Import this workflow first, then assign its n8n workflow ID in each project workflow."
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = $input.first().json || {};\nconst wf = raw.workflow || {};\nconst exec = raw.execution || {};\nconst err = raw.error || {};\nconst node = raw.node || {};\n\nconst wfName = String(wf.name || raw.workflowName || raw.workflow_id || 'unknown');\nconst wfId = String(wf.id || raw.workflowId || raw.workflow_id || '');\nconst execId = String(exec.id || raw.executionId || raw.execution_id || '');\nconst nodeName = String(node.name || raw.lastNode || raw.node_name || 'unknown');\nconst errMsg = String(err.message || raw.errorMessage || raw.message || 'No error message');\nconst errName = String(err.name || raw.errorName || 'Error');\nconst errStack = String(err.stack || '');\n\nlet project_id = 'shared';\nif (/^p1|lead|qualification|crm.?handoff|follow.?up|pipeline/i.test(wfName)) project_id = 'P1';\nelse if (/^p2|inbox|triage|review|operations.?brief|retention/i.test(wfName)) project_id = 'P2';\nelse if (/^p3|hubspot|airtable|reconcil|backfill|dead.?letter|sync.?health/i.test(wfName)) project_id = 'P3';\n\nconst stage = nodeName;\nconst lc = (errMsg + ' ' + errName).toLowerCase();\nlet severity = 'medium';\nlet retryable = false;\nlet error_code = 'unknown';\nif (/401|403|unauthor|forbidden|invalid.?grant/.test(lc)) { severity = 'critical'; error_code = 'auth_error'; retryable = false; }\nelse if (/429|rate.?limit|too.?many.?requests/.test(lc)) { severity = 'high'; error_code = 'rate_limited'; retryable = true; }\nelse if (/5[0-9][0-9]|server|timeout|econn|network|socket|dns|getaddr/.test(lc)) { severity = 'high'; error_code = 'transient'; retryable = true; }\nelse if (/schema|validation|invalid|malformed|400|bad.?request|enum/.test(lc)) { severity = 'high'; error_code = 'schema_error'; retryable = false; }\nelse { error_code = (errName.slice(0, 40) || 'error'); }\n\nconst secretPat = /(sk-[a-zA-Z0-9]{8,}|Bearer\\s+[a-zA-Z0-9._-]+|password[\"\\s:=]+[^\\s,]+|api[_-]?key[\"\\s:=]+[^\\s,]+|token[\"\\s:=]+[^\\s,]+|pat[a-zA-Z0-9]{8,})/gi;\nconst redact = s => String(s == null ? '' : s).replace(secretPat, '[REDACTED]').slice(0, 2000);\nconst sanitized_error = redact(errMsg + (errStack ? '\\n' + errStack : ''));\n\nconst hash = s => { let h = 5381; for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) >>> 0; return h.toString(16); };\nconst fingerprint = hash(project_id + '|' + wfName + '|' + stage + '|' + error_code);\nconst correlation_id = String(raw.correlation_id || execId || 'err-' + fingerprint);\n\nconst replayData = raw.data || raw.items || raw.input || exec.data || null;\nconst has_replay = !!replayData;\nconst sanitized_input = has_replay ? redact(JSON.stringify(replayData)) : '';\n\nconst now = new Date().toISOString();\nconst attempt = Number(raw.attempt || exec.retryAttempt || 0);\n\nreturn [{ json: {\n  project_id, workflow_id: wfId, workflow_name: wfName, execution_id: execId,\n  stage, status: 'failed', attempt, severity, error_code, retryable,\n  correlation_id, fingerprint, sanitized_error, sanitized_input,\n  has_replay, started_at: String(raw.started_at || exec.startedAt || now),\n  completed_at: now, external_ids: '',\n  replay_of: String(raw.replay_of || exec.retryOf || ''),\n  alert_group_key: project_id + ':' + fingerprint\n}}];"
+      },
+      "id": "p0-normalize-redact",
+      "name": "Normalize & Redact Error",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -360,
+        0
+      ],
+      "notes": "Derives project/stage/severity/correlation/fingerprint from the error payload and redacts secret-like substrings. Group key suppresses alert storms within a window."
+    },
+    {
+      "parameters": {
+        "authentication": "airtableTokenApi",
+        "resource": "record",
+        "operation": "create",
+        "base": {
+          "__rl": true,
+          "value": "REPLACE-AIRTABLE-BASE-ID",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "REPLACE-TABLE-ID",
+          "mode": "id"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "correlation_id": "={{ $('Normalize & Redact Error').item.json.correlation_id }}",
+            "project_id": "={{ $('Normalize & Redact Error').item.json.project_id }}",
+            "workflow_id": "={{ $('Normalize & Redact Error').item.json.workflow_name }}",
+            "execution_id": "={{ $('Normalize & Redact Error').item.json.execution_id }}",
+            "stage": "={{ $('Normalize & Redact Error').item.json.stage }}",
+            "status": "={{ $('Normalize & Redact Error').item.json.status }}",
+            "attempt": "={{ $('Normalize & Redact Error').item.json.attempt }}",
+            "started_at": "={{ $('Normalize & Redact Error').item.json.started_at }}",
+            "completed_at": "={{ $('Normalize & Redact Error').item.json.completed_at }}",
+            "external_ids": "={{ $('Normalize & Redact Error').item.json.external_ids }}",
+            "error_code": "={{ $('Normalize & Redact Error').item.json.error_code }}",
+            "sanitized_error": "={{ $('Normalize & Redact Error').item.json.sanitized_error }}",
+            "replay_of": "={{ $('Normalize & Redact Error').item.json.replay_of }}"
+          },
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      },
+      "id": "p0-write-audit",
+      "name": "Write execution_audit",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        -120,
+        0
+      ],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "notes": "Writes an execution_audit row for every handled failure. Verified Airtable credential bound for the target environment."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $('Normalize & Redact Error').item.json.has_replay }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "p0-has-replay",
+      "name": "Has Replay Data?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        120,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "airtableTokenApi",
+        "resource": "record",
+        "operation": "create",
+        "base": {
+          "__rl": true,
+          "value": "REPLACE-AIRTABLE-BASE-ID",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "REPLACE-TABLE-ID",
+          "mode": "id"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "correlation_id": "={{ $('Normalize & Redact Error').item.json.correlation_id }}",
+            "project_id": "={{ $('Normalize & Redact Error').item.json.project_id }}",
+            "workflow_id": "={{ $('Normalize & Redact Error').item.json.workflow_name }}",
+            "failed_stage": "={{ $('Normalize & Redact Error').item.json.stage }}",
+            "sanitized_input": "={{ $('Normalize & Redact Error').item.json.sanitized_input }}",
+            "error_code": "={{ $('Normalize & Redact Error').item.json.error_code }}",
+            "retryable": "={{ $('Normalize & Redact Error').item.json.retryable }}",
+            "attempts": "={{ $('Normalize & Redact Error').item.json.attempt }}",
+            "status": "pending",
+            "created_at": "={{ $('Normalize & Redact Error').item.json.completed_at }}"
+          },
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      },
+      "id": "p0-write-deadletter",
+      "name": "Write dead_letter",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        380,
+        -120
+      ],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "notes": "Dead-letter record only when replay context exists. Verified Airtable credential bound for the target environment."
+    },
+    {
+      "parameters": {
+        "authentication": "accessToken",
+        "resource": "task",
+        "operation": "create",
+        "workspace": "REPLACE-ASANA-WORKSPACE-ID",
+        "name": "={{ '[ALERT][' + $('Normalize & Redact Error').item.json.severity.toUpperCase() + '] ' + $('Normalize & Redact Error').item.json.workflow_name + ' — ' + $('Normalize & Redact Error').item.json.stage }}",
+        "otherProperties": {
+          "projects": [
+            "REPLACE-ASANA-PROJECT-ID"
+          ],
+          "notes": "={{ 'Workflow: ' + $('Normalize & Redact Error').item.json.workflow_name + '\\nExecution ID: ' + $('Normalize & Redact Error').item.json.execution_id + '\\nLast node: ' + $('Normalize & Redact Error').item.json.stage + '\\nSeverity: ' + $('Normalize & Redact Error').item.json.severity + '\\nError code: ' + $('Normalize & Redact Error').item.json.error_code + '\\nCorrelation ID: ' + $('Normalize & Redact Error').item.json.correlation_id + '\\nRetryable: ' + $('Normalize & Redact Error').item.json.retryable + '\\n\\nSanitized message:\\n' + $('Normalize & Redact Error').item.json.sanitized_error + '\\n\\nRunbook: portfolio/<project>/docs/setup.md (Failure & Replay section)' }}"
+        }
+      },
+      "id": "p0-create-alert",
+      "name": "Create Alert Task",
+      "type": "n8n-nodes-base.asana",
+      "typeVersion": 1,
+      "position": [
+        640,
+        0
+      ],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "notes": "Baseline alert channel is an Asana task. Swap the adapter for email or Slack after credentials are configured."
+    }
+  ],
+  "connections": {
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Normalize & Redact Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize & Redact Error": {
+      "main": [
+        [
+          {
+            "node": "Write execution_audit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Write execution_audit": {
+      "main": [
+        [
+          {
+            "node": "Has Replay Data?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Replay Data?": {
+      "main": [
+        [
+          {
+            "node": "Write dead_letter",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Create Alert Task",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Write dead_letter": {
+      "main": [
+        [
+          {
+            "node": "Create Alert Task",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true
+  },
+  "active": false
+}

@@ -1,0 +1,34 @@
+{
+  "test_id": "P2-E2E-004",
+  "scenario": "Newsletter/promotion",
+  "input": {
+    "label": "INBOX",
+    "messageId": "<news-004@updates.example>",
+    "threadId": "thread-news-004",
+    "from": "Marketing Weekly <newsletter@updates.example>",
+    "fromName": "Marketing Weekly",
+    "fromEmail": "newsletter@updates.example",
+    "to": [
+      "ops@northstar.example"
+    ],
+    "subject": "Your weekly marketing digest — 5 trends this week",
+    "textPlain": "This week in marketing: AI personalization, cookieless tracking, short-form video, community-led growth, and B2B pricing experiments. Read the full digest on our blog. To unsubscribe, click here.",
+    "textHtml": "<html><body><h2>Your weekly marketing digest</h2><p>5 trends this week: AI personalization, cookieless tracking, short-form video, community-led growth, and B2B pricing experiments.</p><p><a href=\"https://blog.example/digest\">Read more</a> | <a href=\"https://example.example/unsubscribe\">Unsubscribe</a></p></body></html>",
+    "receivedDate": "2026-07-15T06:00:00+05:30",
+    "attachments": []
+  },
+  "expected": {
+    "processing_status": "triaged",
+    "category": "newsletter",
+    "importance": "low",
+    "needs_reply": false,
+    "needs_task": false,
+    "sensitive": false,
+    "draft_created": false,
+    "task_created": false,
+    "urgent_alert_sent": false,
+    "review_required": false,
+    "deterministic_rules_applied": true,
+    "no_task_or_reply": true
+  }
+}

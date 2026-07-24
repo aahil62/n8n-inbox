@@ -1,0 +1,324 @@
+{
+  "name": "P2-04 Daily Operations Brief",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "days",
+              "daysInterval": 1,
+              "triggerAtHour": 8,
+              "triggerAtMinute": 30
+            }
+          ]
+        }
+      },
+      "id": "p2-brief-schedule",
+      "name": "Daily 08:30 IST",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -700,
+        0
+      ],
+      "notes": "Daily operations brief at 08:30 Asia/Kolkata (timezone set in workflow settings). Built from stored email_events state and Asana tasks, never from model memory."
+    },
+    {
+      "parameters": {
+        "authentication": "accessToken",
+        "resource": "task",
+        "operation": "getAll",
+        "returnAll": true,
+        "filters": {
+          "project": "REPLACE-ASANA-PROJECT-ID"
+        },
+        "otherOptions": {}
+      },
+      "id": "p2-brief-asana-tasks",
+      "name": "Get Asana Tasks",
+      "type": "n8n-nodes-base.asana",
+      "typeVersion": 1,
+      "position": [
+        -460,
+        0
+      ],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "notes": "Fetches open Asana tasks from project REPLACE-ASANA-PROJECT-ID (verified Asana credential)."
+    },
+    {
+      "parameters": {
+        "authentication": "airtableTokenApi",
+        "resource": "record",
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "REPLACE-AIRTABLE-BASE-ID",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "REPLACE-TABLE-ID",
+          "mode": "id"
+        },
+        "filterByFormula": "OR({reported_at} = BLANK(), {reported_at} = '')",
+        "limit": 100,
+        "options": {},
+        "returnAll": false
+      },
+      "id": "p2-brief-get-events",
+      "name": "Get Unreported email_events",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        -220,
+        0
+      ],
+      "alwaysOutputData": true,
+      "notes": "Gets email_events not yet marked reported_at. Items remain unreported until the brief is successfully delivered (P2-E2E-012)."
+    },
+    {
+      "parameters": {
+        "jsCode": "const esc = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nconst today = new Date().toDateString();\nconst events = $('Get Unreported email_events').all().map(i => { const f = i.json.fields || i.json; return { id: i.json.id || f.id || '', subject: f.subject || '(no subject)', from_name: f.from_name || f.from_email || '', category: f.category || 'other', importance: f.importance || 'low', needs_reply: !!f.needs_reply, message_id: f.message_id || '' }; });\nconst tasks = $('Get Asana Tasks').all().map(i => i.json).filter(t => t && !t.completed).map(t => ({ name: t.name || '(unnamed)', due_on: t.due_on || t.due_at || null, notes: String(t.notes || '').slice(0, 160) }));\nconst high = events.filter(e => e.importance === 'high');\nconst replyNeeded = events.filter(e => e.needs_reply);\nconst overdue = tasks.filter(t => t.due_on && t.due_on < new Date().toISOString().slice(0, 10));\nlet brief = 'Daily Operations Brief — ' + today + '\\n\\n';\nbrief += 'Urgent mail (' + high.length + '):\\n';\nbrief += high.length ? high.map(e => '  • [' + e.category + '] ' + e.subject + ' — from ' + e.from_name).join('\\n') : '  (none)';\nbrief += '\\n\\nDrafts awaiting review (' + replyNeeded.length + '):\\n';\nbrief += replyNeeded.length ? replyNeeded.map(e => '  • ' + e.subject + ' — from ' + e.from_name).join('\\n') : '  (none)';\nbrief += '\\n\\nOpen Asana tasks (' + tasks.length + ', overdue ' + overdue.length + '):\\n';\nbrief += tasks.length ? tasks.slice(0, 20).map(t => '  • ' + t.name + (t.due_on ? ' (due ' + t.due_on + ')' : '')).join('\\n') : '  (none)';\nif (overdue.length) { brief += '\\n\\nOverdue:\\n' + overdue.map(t => '  • ' + t.name + ' (due ' + t.due_on + ')').join('\\n'); }\nreturn [{ json: { today, brief_text: brief, brief_html: '<pre>' + esc(brief) + '</pre>', event_ids: events.map(e => ({ id: e.id, message_id: e.message_id })), high_count: high.length, reply_count: replyNeeded.length, task_count: tasks.length, overdue_count: overdue.length } }];"
+      },
+      "id": "p2-brief-build",
+      "name": "Build Brief",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        20,
+        0
+      ],
+      "notes": "Builds the brief from deterministic email_events state and Asana tasks — not model memory. Counts are code-computed; AI is not used to invent values."
+    },
+    {
+      "parameters": {
+        "authentication": "accessToken",
+        "resource": "message",
+        "operation": "post",
+        "channelId": {
+          "__rl": true,
+          "value": "daily-operations-brief",
+          "mode": "name"
+        },
+        "text": "={{ $json.brief_text }}",
+        "otherOptions": {}
+      },
+      "id": "p2-brief-send",
+      "name": "Send Brief",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [
+        260,
+        0
+      ],
+      "continueOnFail": true,
+      "notes": "Delivers the brief via a notification node (credentials required after import). continueOnFail so a delivery failure is detectable without crashing."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ !$json.error }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "p2-brief-sent-if",
+      "name": "Brief Sent OK?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        500,
+        0
+      ],
+      "notes": "If delivery fails, items remain unreported and appear on the next retry exactly once (P2-E2E-012)."
+    },
+    {
+      "parameters": {
+        "jsCode": "const ids = $('Build Brief').item.json.event_ids || [];\nreturn ids.map(e => ({ json: { record_id: e.id, message_id: e.message_id, reported_at: new Date().toISOString() } }));"
+      },
+      "id": "p2-brief-mark-list",
+      "name": "Prepare Mark List",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        740,
+        -120
+      ],
+      "notes": "Outputs one item per email_event to mark reported_at. Empty list when there were no unreported items."
+    },
+    {
+      "parameters": {
+        "authentication": "airtableTokenApi",
+        "resource": "record",
+        "operation": "update",
+        "base": {
+          "__rl": true,
+          "value": "REPLACE-AIRTABLE-BASE-ID",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "REPLACE-TABLE-ID",
+          "mode": "id"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "reported_at": "={{ $json.reported_at }}",
+            "id": "={{ $json.record_id }}"
+          },
+          "matchingColumns": [
+            "id"
+          ],
+          "schema": []
+        },
+        "options": {}
+      },
+      "id": "p2-brief-mark-reported",
+      "name": "Mark Reported",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        980,
+        -120
+      ],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "notes": "Marks items reported_at ONLY after successful delivery. Processes each input item (one update per email_event)."
+    },
+    {
+      "parameters": {
+        "jsCode": "const b = $('Build Brief').first().json || {};\nconst sendNode = $('Send Brief');\nconst sendErr = sendNode.all().length && sendNode.first().json.error ? String(sendNode.first().json.error) : '';\nconst marked = $('Prepare Mark List').all().length;\nreturn [{ json: {\n  date: b.today,\n  delivered: !sendErr,\n  delivery_error: sendErr,\n  items_reported: marked,\n  high_count: b.high_count,\n  reply_count: b.reply_count,\n  task_count: b.task_count,\n  overdue_count: b.overdue_count,\n  final_status: sendErr ? 'delivery_failed_items_remain_unreported' : 'brief_delivered_items_reported'\n}}];"
+      },
+      "id": "p2-brief-result",
+      "name": "Build Brief Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1220,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Daily 08:30 IST": {
+      "main": [
+        [
+          {
+            "node": "Get Asana Tasks",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Asana Tasks": {
+      "main": [
+        [
+          {
+            "node": "Get Unreported email_events",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Unreported email_events": {
+      "main": [
+        [
+          {
+            "node": "Build Brief",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Brief": {
+      "main": [
+        [
+          {
+            "node": "Send Brief",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Brief": {
+      "main": [
+        [
+          {
+            "node": "Brief Sent OK?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Brief Sent OK?": {
+      "main": [
+        [
+          {
+            "node": "Prepare Mark List",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build Brief Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Mark List": {
+      "main": [
+        [
+          {
+            "node": "Mark Reported",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Reported": {
+      "main": [
+        [
+          {
+            "node": "Build Brief Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Kolkata",
+    "errorWorkflow": "REPLACE-SHARED-ERROR-WORKFLOW-ID"
+  },
+  "active": false
+}

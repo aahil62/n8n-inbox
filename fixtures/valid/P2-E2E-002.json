@@ -1,0 +1,32 @@
+{
+  "test_id": "P2-E2E-002",
+  "scenario": "Normal reply-required email",
+  "input": {
+    "label": "INBOX",
+    "messageId": "<normal-002@northstar.example>",
+    "threadId": "thread-normal-002",
+    "from": "Jordan Lee <jordan@globex.example>",
+    "fromName": "Jordan Lee",
+    "fromEmail": "jordan@globex.example",
+    "to": [
+      "ops@northstar.example"
+    ],
+    "subject": "Question about last week's campaign report",
+    "textPlain": "Hi, thanks for the campaign report you sent last Friday. I had a couple of questions about the conversion metrics on page 3 — could you walk me through how the attribution model was applied? Happy to hop on a call this week if easier.",
+    "textHtml": "<html><body><p>Hi, thanks for the campaign report you sent last Friday. I had a couple of questions about the conversion metrics on page 3 — could you walk me through how the attribution model was applied? Happy to hop on a call this week if easier.</p></body></html>",
+    "receivedDate": "2026-07-15T10:30:00+05:30",
+    "attachments": []
+  },
+  "expected": {
+    "processing_status": "triaged",
+    "category": "client_request",
+    "importance": "medium",
+    "needs_reply": true,
+    "needs_task": true,
+    "sensitive": false,
+    "draft_created": true,
+    "task_created": true,
+    "urgent_alert_sent": false,
+    "review_required": false
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "test_id": "P2-E2E-008",
+  "scenario": "Malformed HTML/missing sender name",
+  "input": {
+    "label": "INBOX",
+    "messageId": "<malformed-008@northstar.example>",
+    "threadId": "thread-malformed-008",
+    "from": "no-reply@mailer.example",
+    "fromName": "",
+    "fromEmail": "no-reply@mailer.example",
+    "to": [
+      "ops@northstar.example"
+    ],
+    "subject": "",
+    "textPlain": "",
+    "textHtml": "<html><head><style>body{color:red}</style></head><body><div><p>Hi<!-- <script>broken</script> --><b>We updated your account settings</b></p><p>Click here to verify: <a href=\"https://verify.example.example/confirm\">verify</a></p></div><div>On Mon, someone wrote: &gt; previous message</div></body></html>",
+    "receivedDate": "2026-07-15T16:40:00+05:30",
+    "attachments": []
+  },
+  "expected": {
+    "safe_normalization_or_explicit_reject": true,
+    "html_sanitized_to_text": true,
+    "scripts_stripped": true,
+    "styles_stripped": true,
+    "quoted_history_removed": true,
+    "missing_sender_name_handled": true,
+    "missing_subject_handled": true,
+    "body_treated_as_untrusted": true,
+    "processing_status": "triaged or received",
+    "no_crash": true
+  }
+}

@@ -1,0 +1,33 @@
+{
+  "test_id": "P2-E2E-003",
+  "scenario": "Informational email",
+  "input": {
+    "label": "INBOX",
+    "messageId": "<info-003@northstar.example>",
+    "threadId": "thread-info-003",
+    "from": "Sam Patel <sam@northstar.example>",
+    "fromName": "Sam Patel",
+    "fromEmail": "sam@northstar.example",
+    "to": [
+      "ops@northstar.example"
+    ],
+    "subject": "FYI: Updated brand guidelines now in shared drive",
+    "textPlain": "Hi everyone, just letting you know the updated brand guidelines v2.3 are now in the shared drive under /brand/2026. No action needed — just reference them for upcoming client work.",
+    "textHtml": "<html><body><p>Hi everyone, just letting you know the updated brand guidelines v2.3 are now in the shared drive under /brand/2026. No action needed — just reference them for upcoming client work.</p></body></html>",
+    "receivedDate": "2026-07-15T11:00:00+05:30",
+    "attachments": []
+  },
+  "expected": {
+    "processing_status": "triaged",
+    "category": "internal",
+    "importance": "low",
+    "needs_reply": false,
+    "needs_task": false,
+    "sensitive": false,
+    "draft_created": false,
+    "task_created": false,
+    "urgent_alert_sent": false,
+    "review_required": false,
+    "summary_stored": true
+  }
+}

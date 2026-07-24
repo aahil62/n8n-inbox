@@ -1,0 +1,45 @@
+{
+  "test_id": "P2-E2E-009",
+  "scenario": "Attachment present",
+  "input": {
+    "label": "INBOX",
+    "messageId": "<attach-009@northstar.example>",
+    "threadId": "thread-attach-009",
+    "from": "Riya Mehta <riya@acmecorp.example>",
+    "fromName": "Riya Mehta",
+    "fromEmail": "riya@acmecorp.example",
+    "to": [
+      "ops@northstar.example"
+    ],
+    "subject": "Q2 invoice and signed SOW attached",
+    "textPlain": "Hi, please find the Q2 invoice and the signed statement of work attached. Let me know if anything needs adjusting before we process payment.",
+    "textHtml": "<html><body><p>Hi, please find the Q2 invoice and the signed statement of work attached. Let me know if anything needs adjusting before we process payment.</p></body></html>",
+    "receivedDate": "2026-07-15T14:20:00+05:30",
+    "attachments": [
+      {
+        "filename": "Q2-invoice.pdf",
+        "mimeType": "application/pdf",
+        "size": 245678
+      },
+      {
+        "filename": "signed-sow.pdf",
+        "mimeType": "application/pdf",
+        "size": 512000
+      }
+    ]
+  },
+  "expected": {
+    "processing_status": "triaged",
+    "category": "billing",
+    "importance": "medium",
+    "needs_reply": true,
+    "needs_task": true,
+    "sensitive": false,
+    "draft_created": true,
+    "task_created": true,
+    "urgent_alert_sent": false,
+    "review_required": false,
+    "attachment_metadata_recorded": true,
+    "unsupported_content_not_silently_parsed": true
+  }
+}

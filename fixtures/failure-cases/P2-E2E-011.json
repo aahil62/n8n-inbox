@@ -1,0 +1,31 @@
+{
+  "test_id": "P2-E2E-011",
+  "scenario": "Asana API failure",
+  "input": {
+    "label": "INBOX",
+    "messageId": "<asana-fail-011@northstar.example>",
+    "threadId": "thread-asana-fail-011",
+    "from": "Priya Sharma <priya@acmecorp.example>",
+    "fromName": "Priya Sharma",
+    "fromEmail": "priya@acmecorp.example",
+    "to": [
+      "ops@northstar.example"
+    ],
+    "subject": "Need the onboarding kit sent to our new hire by Friday",
+    "textPlain": "Hi, we have a new hire starting Monday. Could you send the onboarding kit and set up their access by Friday end of day? It's time-sensitive.",
+    "textHtml": "<html><body><p>Hi, we have a new hire starting Monday. Could you send the onboarding kit and set up their access by Friday end of day? It's time-sensitive.</p></body></html>",
+    "receivedDate": "2026-07-15T12:00:00+05:30",
+    "attachments": []
+  },
+  "instructions": "Induce an Asana API failure (e.g. temporarily invalidate/disconnect the Asana credential, or return 500) while the Gmail draft path remains working.",
+  "expected": {
+    "draft_state_preserved": true,
+    "task_marked_failed": true,
+    "task_error_code_populated": true,
+    "dead_letter_record_written": true,
+    "dead_letter_retryable": true,
+    "no_false_synced_state": true,
+    "replayable_after_fix": true,
+    "draft_not_erased_by_task_failure": true
+  }
+}

@@ -1,0 +1,29 @@
+{
+  "test_id": "P2-E2E-005",
+  "scenario": "Duplicate IMAP/Gmail delivery",
+  "input": {
+    "label": "INBOX",
+    "messageId": "<dup-005@northstar.example>",
+    "threadId": "thread-dup-005",
+    "from": "Jordan Lee <jordan@globex.example>",
+    "fromName": "Jordan Lee",
+    "fromEmail": "jordan@globex.example",
+    "to": [
+      "ops@northstar.example"
+    ],
+    "subject": "Question about last week's campaign report",
+    "textPlain": "Hi, thanks for the campaign report you sent last Friday. I had a couple of questions about the conversion metrics on page 3 — could you walk me through how the attribution model was applied?",
+    "textHtml": "<html><body><p>Hi, thanks for the campaign report you sent last Friday. I had a couple of questions about the conversion metrics on page 3 — could you walk me through how the attribution model was applied?</p></body></html>",
+    "receivedDate": "2026-07-15T10:30:00+05:30",
+    "attachments": []
+  },
+  "instructions": "Send this same input twice with the same messageId. The idempotency_key (INBOX:<dup-005@northstar.example>) must match on the second delivery.",
+  "expected": {
+    "second_delivery_stopped": true,
+    "no_duplicate_draft": true,
+    "no_duplicate_task": true,
+    "no_duplicate_alert": true,
+    "single_email_events_record": true,
+    "idempotency_key": "INBOX:<dup-005@northstar.example>"
+  }
+}

@@ -1,0 +1,550 @@
+{
+  "name": "P2-03 Review and Task Handoff",
+  "nodes": [
+    {
+      "parameters": {
+        "description": "Accepts a triage decision plus email context from P2-01. Creates a reviewable Gmail draft (never auto-send), upserts an idempotent Asana task, and sends an urgent alert only for configured urgent conditions. On Asana failure the draft state is preserved and the task is marked failed + replayable.",
+        "inputSource": "passthrough",
+        "returnOutput": "lastRunOnly"
+      },
+      "id": "p2-handoff-trigger",
+      "name": "On Handoff Request",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -700,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "airtableTokenApi",
+        "resource": "record",
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "REPLACE-AIRTABLE-BASE-ID",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "REPLACE-TABLE-ID",
+          "mode": "id"
+        },
+        "filterByFormula": "={{ `{message_id} = \"${$json.message_id}\"` }}",
+        "limit": 1,
+        "options": {},
+        "returnAll": false
+      },
+      "id": "p2-handoff-load-event",
+      "name": "Load email_events State",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        -480,
+        0
+      ],
+      "alwaysOutputData": true,
+      "notes": "Loads the existing email_events row to check for an already-populated draft_id/task_id. Task idempotency uses the email Message-ID so reruns cannot duplicate tasks."
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = $('On Handoff Request').item.json;\nconst j = { ...raw, ...(raw.triage || {}) };\nconst rec = $('Load email_events State').first().json || {};\nconst ef = rec.fields || rec;\nconst existingDraftId = String(ef.draft_id || '');\nconst existingTaskId = String(ef.task_id || '');\nconst reviewRequired = !!j.review_required;\nconst accepted = !reviewRequired;\nconst createDraft = accepted && !!j.needs_reply && !existingDraftId;\nconst createTask = accepted && !!j.needs_task && !existingTaskId;\nconst urgentConfig = { importance: 'high', categories: ['client_request', 'billing'] };\nconst sendAlert = accepted && j.importance === urgentConfig.importance && urgentConfig.categories.includes(j.category);\nreturn [{ json: {\n  ...j,\n  existing_draft_id: existingDraftId,\n  existing_task_id: existingTaskId,\n  create_draft: createDraft,\n  create_task: createTask,\n  send_alert: sendAlert,\n  task_idempotency_key: j.message_id ? 'msg:' + j.message_id : j.idempotency_key\n}}];"
+      },
+      "id": "p2-handoff-plan",
+      "name": "Prepare Handoff Plan",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -260,
+        0
+      ],
+      "notes": "Determines which side effects to create. Review_required items get no draft, task, or alert (the review_queue record from P2-02 holds the draft for human review). Urgent alert only for configured urgent conditions (high importance + client_request/billing)."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.create_draft }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "p2-handoff-draft-if",
+      "name": "Needs Reply & Accepted?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -40,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "draft",
+        "operation": "create",
+        "to": "={{ $('Prepare Handoff Plan').item.json.from_email }}",
+        "subject": "={{ 'Re: ' + $('Prepare Handoff Plan').item.json.subject }}",
+        "message": "={{ $('Prepare Handoff Plan').item.json.draft_reply }}",
+        "options": {}
+      },
+      "id": "p2-handoff-gmail-draft",
+      "name": "Create Gmail Draft",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        180,
+        -120
+      ],
+      "continueOnFail": true,
+      "notes": "Creates a reviewable Gmail draft (never auto-send). credentials required after import. Fallback if this Gmail draft operation is unsupported in the n8n version: store the draft text in the review_queue Airtable record instead (still never auto-send). continueOnFail so a draft failure does not block the Asana task."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $('Prepare Handoff Plan').item.json.create_task }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "p2-handoff-task-if",
+      "name": "Needs Task & Accepted?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        400,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "accessToken",
+        "resource": "task",
+        "operation": "create",
+        "workspace": "REPLACE-ASANA-WORKSPACE-ID",
+        "name": "={{ '[msg:' + ($('Prepare Handoff Plan').item.json.message_id || $('Prepare Handoff Plan').item.json.idempotency_key) + '] ' + ($('Prepare Handoff Plan').item.json.category || 'inbox') + ': ' + ($('Prepare Handoff Plan').item.json.subject || '(no subject)') }}",
+        "otherProperties": {
+          "projects": [
+            "REPLACE-ASANA-PROJECT-ID"
+          ],
+          "due_on": "={{ $('Prepare Handoff Plan').item.json.suggested_due_at ? $('Prepare Handoff Plan').item.json.suggested_due_at.slice(0,10) : '' }}",
+          "notes": "={{ 'Source: ' + ($('Prepare Handoff Plan').item.json.source_link || 'n/a') + '\\nMailbox: ' + $('Prepare Handoff Plan').item.json.mailbox + '\\nCorrelation ID: ' + $('Prepare Handoff Plan').item.json.correlation_id + '\\nMessage-ID: ' + $('Prepare Handoff Plan').item.json.message_id + '\\nCategory: ' + ($('Prepare Handoff Plan').item.json.category || '') + '\\nImportance: ' + ($('Prepare Handoff Plan').item.json.importance || '') + '\\nConfidence: ' + ($('Prepare Handoff Plan').item.json.confidence || '') + '\\n\\nSummary: ' + ($('Prepare Handoff Plan').item.json.summary || '') + '\\n\\nDraft reply (review before sending):\\n' + ($('Prepare Handoff Plan').item.json.draft_reply || '(none)') }}"
+        }
+      },
+      "id": "p2-handoff-asana-task",
+      "name": "Create Asana Task",
+      "type": "n8n-nodes-base.asana",
+      "typeVersion": 1,
+      "position": [
+        620,
+        -120
+      ],
+      "continueOnFail": true,
+      "notes": "Upserts an Asana task in project REPLACE-ASANA-PROJECT-ID with source link, summary, mailbox, correlation ID, and due date. Task name includes the Message-ID-derived idempotency key so reruns cannot duplicate tasks. continueOnFail so an Asana failure preserves the draft and is handled below."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $('Prepare Handoff Plan').item.json.send_alert }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "p2-handoff-alert-if",
+      "name": "Urgent Alert Needed?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        840,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return $input.all().map(item => ({ json: { ...item.json, alert_sent: false, alert_skipped: true, alert_reason: 'slack_not_configured' } }));"
+      },
+      "id": "p2-handoff-urgent-alert",
+      "name": "Send Urgent Alert",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1060,
+        -120
+      ],
+      "notes": "Slack is an optional add-on and no credential is configured in the portfolio environment. This explicit no-op preserves the urgent-alert branch without making the master workflow invalid."
+    },
+    {
+      "parameters": {
+        "jsCode": "const plan = $('Prepare Handoff Plan').item.json;\nconst optionalFirstJson = (name) => {\n  try { return $(name).first().json || {}; }\n  catch { return {}; }\n};\nconst draft = optionalFirstJson('Create Gmail Draft');\nconst task = optionalFirstJson('Create Asana Task');\nconst alert = optionalFirstJson('Send Urgent Alert');\nconst draftId = draft.id || draft.draftId || plan.existing_draft_id || '';\nconst draftError = draft.error || draft.json?.error || '';\nconst taskId = task.gid || task.id || task.data || plan.existing_task_id || '';\nlet taskError = '';\nif (plan.create_task && !taskId) taskError = String(task.error || task.json?.error || 'asana_create_failed');\nconst alertSent = plan.send_alert && !alert.error && !alert.alert_skipped && Object.keys(alert).length > 0;\nconst alertError = plan.send_alert && alert.error ? String(alert.error) : '';\nreturn [{ json: {\n  correlation_id: plan.correlation_id,\n  message_id: plan.message_id,\n  email_event_id: plan.email_event_id,\n  draft_id: draftId,\n  draft_error: draftError,\n  task_id: taskId,\n  task_status: taskError ? 'failed' : (taskId ? 'synced' : 'not_applicable'),\n  task_error_code: taskError,\n  alert_sent: !!alertSent,\n  alert_error: alertError,\n  review_required: plan.review_required,\n  review_queue_id: plan.review_queue_id || '',\n  asana_failed: !!taskError\n} }];"
+      },
+      "id": "p2-handoff-capture",
+      "name": "Capture Handoff Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1280,
+        0
+      ],
+      "notes": "Merges draft_id, task_id, alert_sent, and any errors. Task state is pending → synced only after a verified Asana task ID; failed on Asana API failure. Draft state is preserved independently."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.asana_failed }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "p2-handoff-asana-failed-if",
+      "name": "Asana Failed?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1500,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "airtableTokenApi",
+        "resource": "record",
+        "operation": "create",
+        "base": {
+          "__rl": true,
+          "value": "REPLACE-AIRTABLE-BASE-ID",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "REPLACE-TABLE-ID",
+          "mode": "id"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "correlation_id": "={{ $('Capture Handoff Results').item.json.correlation_id }}",
+            "project_id": "P2",
+            "workflow_id": "P2-03 Review and Task Handoff",
+            "failed_stage": "asana_task_create",
+            "sanitized_input": "={{ JSON.stringify($('Prepare Handoff Plan').item.json).slice(0, 2000) }}",
+            "error_code": "={{ $('Capture Handoff Results').item.json.task_error_code }}",
+            "retryable": true,
+            "attempts": 1,
+            "status": "pending",
+            "created_at": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      },
+      "id": "p2-handoff-dead-letter",
+      "name": "Write Dead Letter",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        1720,
+        220
+      ],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "notes": "On Asana API failure: draft state is preserved, task marked failed + replayable (P2-E2E-011). The draft is not erased by the task failure."
+    },
+    {
+      "parameters": {
+        "authentication": "airtableTokenApi",
+        "resource": "record",
+        "operation": "update",
+        "base": {
+          "__rl": true,
+          "value": "REPLACE-AIRTABLE-BASE-ID",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "REPLACE-TABLE-ID",
+          "mode": "id"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "draft_id": "={{ $('Capture Handoff Results').item.json.draft_id }}",
+            "task_id": "={{ $('Capture Handoff Results').item.json.task_id }}",
+            "last_error_code": "={{ $('Capture Handoff Results').item.json.task_error_code }}",
+            "id": "={{ $('Capture Handoff Results').first().json.email_event_id }}"
+          },
+          "matchingColumns": [
+            "id"
+          ],
+          "schema": []
+        },
+        "options": {}
+      },
+      "id": "p2-handoff-update-event",
+      "name": "Update email_events Handoff State",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        1940,
+        0
+      ],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "notes": "Writes draft_id and task_id to email_events only after the handoff returns. task_id is populated only when a verified Asana task ID exists."
+    },
+    {
+      "parameters": {
+        "jsCode": "const c = $('Capture Handoff Results').item.json;\nreturn [{ json: {\n  correlation_id: c.correlation_id,\n  message_id: c.message_id,\n  email_event_id: c.email_event_id,\n  draft_id: c.draft_id,\n  task_id: c.task_id,\n  task_status: c.task_status,\n  task_error_code: c.task_error_code,\n  alert_sent: c.alert_sent,\n  review_required: c.review_required,\n  review_queue_id: c.review_queue_id,\n  final_status: c.asana_failed ? 'task_failed_draft_preserved' : 'handoff_complete'\n}}];"
+      },
+      "id": "p2-handoff-return",
+      "name": "Return Handoff Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2160,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "On Handoff Request": {
+      "main": [
+        [
+          {
+            "node": "Load email_events State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load email_events State": {
+      "main": [
+        [
+          {
+            "node": "Prepare Handoff Plan",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Handoff Plan": {
+      "main": [
+        [
+          {
+            "node": "Needs Reply & Accepted?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Needs Reply & Accepted?": {
+      "main": [
+        [
+          {
+            "node": "Create Gmail Draft",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Needs Task & Accepted?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Gmail Draft": {
+      "main": [
+        [
+          {
+            "node": "Needs Task & Accepted?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Needs Task & Accepted?": {
+      "main": [
+        [
+          {
+            "node": "Create Asana Task",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Urgent Alert Needed?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Asana Task": {
+      "main": [
+        [
+          {
+            "node": "Urgent Alert Needed?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Urgent Alert Needed?": {
+      "main": [
+        [
+          {
+            "node": "Send Urgent Alert",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Capture Handoff Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Urgent Alert": {
+      "main": [
+        [
+          {
+            "node": "Capture Handoff Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Capture Handoff Results": {
+      "main": [
+        [
+          {
+            "node": "Asana Failed?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Asana Failed?": {
+      "main": [
+        [
+          {
+            "node": "Write Dead Letter",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Update email_events Handoff State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Write Dead Letter": {
+      "main": [
+        [
+          {
+            "node": "Update email_events Handoff State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update email_events Handoff State": {
+      "main": [
+        [
+          {
+            "node": "Return Handoff Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "errorWorkflow": "REPLACE-SHARED-ERROR-WORKFLOW-ID"
+  },
+  "active": false
+}

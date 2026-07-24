@@ -1,0 +1,43 @@
+{
+  "test_id": "P2-E2E-015",
+  "scenario": "Retention sweep",
+  "input": {
+    "label": "SEED_STATE",
+    "description": "Seed the email_events table with 3 records: one expired (retention_expires_at in the past, text_body populated), one not-yet-expired (text_body populated), one expired already redacted (text_body empty). Then manually trigger P2-05.",
+    "seed_email_events": [
+      {
+        "message_id": "<retention-expired@northstar.example>",
+        "received_at": "2026-06-10T09:00:00+05:30",
+        "retention_expires_at": "2026-07-10T09:00:00+05:30",
+        "text_body": "This raw body should be redacted by the sweep.",
+        "processing_status": "triaged",
+        "category": "client_request"
+      },
+      {
+        "message_id": "<retention-fresh@northstar.example>",
+        "received_at": "2026-07-14T09:00:00+05:30",
+        "retention_expires_at": "2026-08-13T09:00:00+05:30",
+        "text_body": "This raw body should be retained (not expired).",
+        "processing_status": "triaged",
+        "category": "client_request"
+      },
+      {
+        "message_id": "<retention-already-redacted@northstar.example>",
+        "received_at": "2026-06-01T09:00:00+05:30",
+        "retention_expires_at": "2026-07-01T09:00:00+05:30",
+        "text_body": "",
+        "processing_status": "triaged",
+        "category": "client_request"
+      }
+    ],
+    "trigger": "P2-05 manual"
+  },
+  "expected": {
+    "expired_raw_body_removed": true,
+    "audit_metadata_retained": true,
+    "fresh_body_not_touched": true,
+    "already_redacted_not_reprocessed": true,
+    "health_report_sent": true,
+    "stuck_failed_records_reported": true
+  }
+}

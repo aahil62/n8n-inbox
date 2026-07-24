@@ -1,0 +1,47 @@
+{
+  "test_id": "P2-E2E-012",
+  "scenario": "Daily brief delivery failure",
+  "input": {
+    "label": "SEED_STATE",
+    "description": "Seed the email_events table with 3 unreported items (reported_at blank). Then manually trigger P2-04 with the Slack/notification credential temporarily broken so delivery fails. Then restore the credential and trigger P2-04 again.",
+    "seed_email_events": [
+      {
+        "message_id": "<brief-fail-a@northstar.example>",
+        "subject": "Client A request",
+        "category": "client_request",
+        "importance": "high",
+        "needs_reply": true,
+        "processing_status": "triaged",
+        "reported_at": ""
+      },
+      {
+        "message_id": "<brief-fail-b@northstar.example>",
+        "subject": "Invoice question",
+        "category": "billing",
+        "importance": "medium",
+        "needs_reply": true,
+        "processing_status": "triaged",
+        "reported_at": ""
+      },
+      {
+        "message_id": "<brief-fail-c@northstar.example>",
+        "subject": "Meeting reschedule",
+        "category": "meeting",
+        "importance": "medium",
+        "needs_reply": true,
+        "processing_status": "triaged",
+        "reported_at": ""
+      }
+    ],
+    "trigger": "P2-04 manual (first with broken notification, then with restored notification)"
+  },
+  "expected": {
+    "first_delivery_fails": true,
+    "items_remain_unreported_after_failure": true,
+    "reported_at_not_written_on_failure": true,
+    "retry_appears_exactly_once": true,
+    "items_reported_after_successful_retry": true,
+    "brief_totals_match_seeded_state": true,
+    "no_items_lost_after_send_failure": true
+  }
+}

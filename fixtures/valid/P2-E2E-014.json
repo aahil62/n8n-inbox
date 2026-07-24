@@ -1,0 +1,34 @@
+{
+  "test_id": "P2-E2E-014",
+  "scenario": "Thread follow-up",
+  "input": {
+    "label": "INBOX",
+    "messageId": "<thread-014b@northstar.example>",
+    "threadId": "thread-urgent-001",
+    "from": "Priya Sharma <priya@acmecorp.example>",
+    "fromName": "Priya Sharma",
+    "fromEmail": "priya@acmecorp.example",
+    "to": [
+      "ops@northstar.example"
+    ],
+    "subject": "Re: URGENT: Production site is down — needs immediate fix",
+    "textPlain": "Thanks for the quick fix. The site is back up now. One follow-up: can you share a short RCA so I can brief our leadership? No new task needed, just a reply.",
+    "textHtml": "<html><body><p>Thanks for the quick fix. The site is back up now. One follow-up: can you share a short RCA so I can brief our leadership? No new task needed, just a reply.</p></body></html>",
+    "receivedDate": "2026-07-15T09:45:00+05:30",
+    "attachments": []
+  },
+  "expected": {
+    "processing_status": "triaged",
+    "category": "client_request",
+    "importance": "medium",
+    "needs_reply": true,
+    "needs_task": false,
+    "sensitive": false,
+    "draft_created": true,
+    "task_created": false,
+    "urgent_alert_sent": false,
+    "review_required": false,
+    "thread_context_linked": true,
+    "no_unrelated_task_created": true
+  }
+}
