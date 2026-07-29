@@ -22,7 +22,7 @@ Gmail, Asana, AI, and n8n integrations on 24–25 July 2026. This is not the ful
 | P2-E2E-011 | Asana API failure | `fixtures/failure-cases/P2-E2E-011.json` | Draft state preserved; task marked failed and replayable | — | — | — | `not_run_live` | dead_letter retryable=true; draft_id retained |
 | P2-E2E-012 | Daily brief delivery failure | `fixtures/failure-cases/P2-E2E-012.json` | Items remain unreported and appear on successful retry exactly once | — | — | — | `not_run_live` | reported_at not written on failure; retry reports once |
 | P2-E2E-013 | Timezone boundary | `fixtures/valid/P2-E2E-013.json` | Due date and daily schedule match configured business timezone | — | — | — | `not_run_live` | Asia/Kolkata; 08:30 brief; due_on in IST |
-| P2-E2E-014 | Thread follow-up | `fixtures/valid/P2-E2E-014.json` | Existing thread context linked without creating an unrelated task | — | — | — | `not_run_live` | Same threadId; reply draft; no new task |
+| P2-E2E-014 | Thread follow-up | `fixtures/valid/P2-E2E-014.json` | Thread identifier and source link preserved; no claim of full conversation-history retrieval | — | — | — | `not_run_live` | Full thread retrieval and context-aware classification are not implemented |
 | P2-E2E-015 | Retention sweep | `fixtures/valid/P2-E2E-015.json` | Expired raw body removed; audit metadata retained as documented | — | — | — | `not_run_live` | text_body cleared; retention_status=redacted; health report |
 
 ## Summary

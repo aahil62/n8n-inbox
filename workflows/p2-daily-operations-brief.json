@@ -59,7 +59,7 @@
         },
         "table": {
           "__rl": true,
-          "value": "REPLACE-TABLE-ID",
+          "value": "REPLACE-EMAIL-EVENTS-TABLE-ID",
           "mode": "id"
         },
         "filterByFormula": "OR({reported_at} = BLANK(), {reported_at} = '')",
@@ -176,7 +176,7 @@
         },
         "table": {
           "__rl": true,
-          "value": "REPLACE-TABLE-ID",
+          "value": "REPLACE-EMAIL-EVENTS-TABLE-ID",
           "mode": "id"
         },
         "columns": {

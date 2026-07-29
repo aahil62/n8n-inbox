@@ -62,7 +62,7 @@
       "parameters": {
         "workflowId": {
           "__rl": true,
-          "value": "REPLACE-SUBWORKFLOW-ID",
+          "value": "REPLACE-P2-CANONICAL-PROCESSOR-WORKFLOW-ID",
           "mode": "id",
           "cachedResultName": "[E2E] P2-01C Canonical Email Processor"
         },

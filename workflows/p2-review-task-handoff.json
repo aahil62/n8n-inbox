@@ -28,7 +28,7 @@
         },
         "table": {
           "__rl": true,
-          "value": "REPLACE-TABLE-ID",
+          "value": "REPLACE-EMAIL-EVENTS-TABLE-ID",
           "mode": "id"
         },
         "filterByFormula": "={{ `{message_id} = \"${$json.message_id}\"` }}",
@@ -211,7 +211,7 @@
         "jsCode": "return $input.all().map(item => ({ json: { ...item.json, alert_sent: false, alert_skipped: true, alert_reason: 'slack_not_configured' } }));"
       },
       "id": "p2-handoff-urgent-alert",
-      "name": "Send Urgent Alert",
+      "name": "Urgent Alert Adapter — Not Configured",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -222,7 +222,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const plan = $('Prepare Handoff Plan').item.json;\nconst optionalFirstJson = (name) => {\n  try { return $(name).first().json || {}; }\n  catch { return {}; }\n};\nconst draft = optionalFirstJson('Create Gmail Draft');\nconst task = optionalFirstJson('Create Asana Task');\nconst alert = optionalFirstJson('Send Urgent Alert');\nconst draftId = draft.id || draft.draftId || plan.existing_draft_id || '';\nconst draftError = draft.error || draft.json?.error || '';\nconst taskId = task.gid || task.id || task.data || plan.existing_task_id || '';\nlet taskError = '';\nif (plan.create_task && !taskId) taskError = String(task.error || task.json?.error || 'asana_create_failed');\nconst alertSent = plan.send_alert && !alert.error && !alert.alert_skipped && Object.keys(alert).length > 0;\nconst alertError = plan.send_alert && alert.error ? String(alert.error) : '';\nreturn [{ json: {\n  correlation_id: plan.correlation_id,\n  message_id: plan.message_id,\n  email_event_id: plan.email_event_id,\n  draft_id: draftId,\n  draft_error: draftError,\n  task_id: taskId,\n  task_status: taskError ? 'failed' : (taskId ? 'synced' : 'not_applicable'),\n  task_error_code: taskError,\n  alert_sent: !!alertSent,\n  alert_error: alertError,\n  review_required: plan.review_required,\n  review_queue_id: plan.review_queue_id || '',\n  asana_failed: !!taskError\n} }];"
+        "jsCode": "const plan = $('Prepare Handoff Plan').item.json;\nconst optionalFirstJson = (name) => {\n  try { return $(name).first().json || {}; }\n  catch { return {}; }\n};\nconst draft = optionalFirstJson('Create Gmail Draft');\nconst task = optionalFirstJson('Create Asana Task');\nconst alert = optionalFirstJson('Urgent Alert Adapter — Not Configured');\nconst draftId = draft.id || draft.draftId || plan.existing_draft_id || '';\nconst draftError = draft.error || draft.json?.error || '';\nconst taskId = task.gid || task.id || task.data || plan.existing_task_id || '';\nlet taskError = '';\nif (plan.create_task && !taskId) taskError = String(task.error || task.json?.error || 'asana_create_failed');\nconst alertSent = plan.send_alert && !alert.error && !alert.alert_skipped && Object.keys(alert).length > 0;\nconst alertError = plan.send_alert && alert.error ? String(alert.error) : '';\nreturn [{ json: {\n  correlation_id: plan.correlation_id,\n  message_id: plan.message_id,\n  email_event_id: plan.email_event_id,\n  draft_id: draftId,\n  draft_error: draftError,\n  task_id: taskId,\n  task_status: taskError ? 'failed' : (taskId ? 'synced' : 'not_applicable'),\n  task_error_code: taskError,\n  alert_sent: !!alertSent,\n  alert_error: alertError,\n  review_required: plan.review_required,\n  review_queue_id: plan.review_queue_id || '',\n  asana_failed: !!taskError\n} }];"
       },
       "id": "p2-handoff-capture",
       "name": "Capture Handoff Results",
@@ -279,7 +279,7 @@
         },
         "table": {
           "__rl": true,
-          "value": "REPLACE-TABLE-ID",
+          "value": "REPLACE-DEAD-LETTER-TABLE-ID",
           "mode": "id"
         },
         "columns": {
@@ -325,7 +325,7 @@
         },
         "table": {
           "__rl": true,
-          "value": "REPLACE-TABLE-ID",
+          "value": "REPLACE-EMAIL-EVENTS-TABLE-ID",
           "mode": "id"
         },
         "columns": {
@@ -465,7 +465,7 @@
       "main": [
         [
           {
-            "node": "Send Urgent Alert",
+            "node": "Urgent Alert Adapter — Not Configured",
             "type": "main",
             "index": 0
           }
@@ -479,7 +479,7 @@
         ]
       ]
     },
-    "Send Urgent Alert": {
+    "Urgent Alert Adapter — Not Configured": {
       "main": [
         [
           {

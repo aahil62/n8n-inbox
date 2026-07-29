@@ -39,7 +39,7 @@
         },
         "table": {
           "__rl": true,
-          "value": "REPLACE-TABLE-ID",
+          "value": "REPLACE-EXECUTION-AUDIT-TABLE-ID",
           "mode": "id"
         },
         "columns": {
@@ -121,7 +121,7 @@
         },
         "table": {
           "__rl": true,
-          "value": "REPLACE-TABLE-ID",
+          "value": "REPLACE-DEAD-LETTER-TABLE-ID",
           "mode": "id"
         },
         "columns": {

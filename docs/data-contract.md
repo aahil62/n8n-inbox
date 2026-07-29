@@ -67,7 +67,7 @@ The strict schema returned by the AI structured parser in P2-02. Malformed or pa
 
 ## 3. State tables
 
-### `email_events` (Airtable table `REPLACE-AIRTABLE-TABLE-ID`)
+### `email_events` (Airtable table `REPLACE-EMAIL-EVENTS-TABLE-ID`)
 
 ```text
 message_id, mailbox, thread_id, received_at, content_hash, category,
@@ -94,7 +94,7 @@ Additional operational fields used by the workflows: `correlation_id`,
 ### External-write state rule
 `task_id` is populated **only after** the Asana create returns a verified task ID. On Asana API failure → `task_id` stays empty, `last_error_code` is set, a `dead_letter` row is written (retryable), and the **draft is preserved** (`draft_id` is not erased). The draft state and task state are independent.
 
-### `review_queue` (Airtable table `REPLACE-AIRTABLE-TABLE-ID`)
+### `review_queue` (Airtable table `REPLACE-REVIEW-QUEUE-TABLE-ID`)
 
 ```text
 review_id, message_id, reason, draft_text, status, assigned_to,
@@ -109,7 +109,7 @@ to inspect and edit — **never auto-sent**. No Asana task is auto-created for
 
 ## 4. Shared tables (§8.2)
 
-### `execution_audit` (Airtable table `REPLACE-AIRTABLE-TABLE-ID`)
+### `execution_audit` (Airtable table `REPLACE-EXECUTION-AUDIT-TABLE-ID`)
 
 ```text
 correlation_id, project_id, workflow_id, execution_id, stage,
@@ -119,7 +119,7 @@ error_code, sanitized_error, replay_of
 
 Written by P0-99 Shared Error Handler on workflow-level failures.
 
-### `dead_letter` (Airtable table `REPLACE-AIRTABLE-TABLE-ID`)
+### `dead_letter` (Airtable table `REPLACE-DEAD-LETTER-TABLE-ID`)
 
 ```text
 dead_letter_id, correlation_id, project_id, workflow_id,
@@ -135,10 +135,10 @@ Base: `REPLACE-AIRTABLE-BASE-ID` ("Portfolio Automation OS").
 
 | Table | ID |
 |---|---|
-| email_events | `REPLACE-AIRTABLE-TABLE-ID` |
-| review_queue | `REPLACE-AIRTABLE-TABLE-ID` |
-| execution_audit | `REPLACE-AIRTABLE-TABLE-ID` |
-| dead_letter | `REPLACE-AIRTABLE-TABLE-ID` |
+| email_events | `REPLACE-EMAIL-EVENTS-TABLE-ID` |
+| review_queue | `REPLACE-REVIEW-QUEUE-TABLE-ID` |
+| execution_audit | `REPLACE-EXECUTION-AUDIT-TABLE-ID` |
+| dead_letter | `REPLACE-DEAD-LETTER-TABLE-ID` |
 
 ## 6. Asana task contract (P2-03)
 

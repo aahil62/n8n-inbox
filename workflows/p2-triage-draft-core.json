@@ -144,7 +144,7 @@
         },
         "table": {
           "__rl": true,
-          "value": "REPLACE-TABLE-ID",
+          "value": "REPLACE-REVIEW-QUEUE-TABLE-ID",
           "mode": "id"
         },
         "columns": {

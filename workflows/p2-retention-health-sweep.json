@@ -37,7 +37,7 @@
         },
         "table": {
           "__rl": true,
-          "value": "REPLACE-TABLE-ID",
+          "value": "REPLACE-EMAIL-EVENTS-TABLE-ID",
           "mode": "id"
         },
         "filterByFormula": "AND({retention_expires_at} != BLANK(), IS_BEFORE({retention_expires_at}, NOW()))",
@@ -68,7 +68,7 @@
         },
         "table": {
           "__rl": true,
-          "value": "REPLACE-TABLE-ID",
+          "value": "REPLACE-EMAIL-EVENTS-TABLE-ID",
           "mode": "id"
         },
         "columns": {
@@ -108,7 +108,7 @@
         },
         "table": {
           "__rl": true,
-          "value": "REPLACE-TABLE-ID",
+          "value": "REPLACE-EMAIL-EVENTS-TABLE-ID",
           "mode": "id"
         },
         "filterByFormula": "OR({processing_status} = 'failed', {processing_status} = 'review_required', {processing_status} = 'received')",

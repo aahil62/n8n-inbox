@@ -1,0 +1,4 @@
+rule_type,match_type,value,action,priority,active
+vip,domain,client.example,force_high,100,true
+blocked,email,spam@example.test,block,100,true
+newsletter,header,List-Unsubscribe,informational,50,true

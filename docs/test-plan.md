@@ -40,7 +40,7 @@ All fixtures use `.example` domains and Northstar Growth Studio fictional data.
 | P2-E2E-011 | Asana API failure | `failure-cases/P2-E2E-011.json` | P2-01 (break Asana) | Draft state preserved; task marked failed and replayable |
 | P2-E2E-012 | Daily brief delivery failure | `failure-cases/P2-E2E-012.json` | trigger P2-04 (break Slack) | Items remain unreported and appear on successful retry exactly once |
 | P2-E2E-013 | Timezone boundary | `valid/P2-E2E-013.json` | P2-01 inbox | Due date and daily schedule match configured business timezone |
-| P2-E2E-014 | Thread follow-up | `valid/P2-E2E-014.json` | P2-01 inbox | Existing thread context linked without creating an unrelated task |
+| P2-E2E-014 | Thread follow-up | `valid/P2-E2E-014.json` | P2-01 inbox | Thread identifier and source link preserved without claiming full conversation-history retrieval |
 | P2-E2E-015 | Retention sweep | `valid/P2-E2E-015.json` | seed + trigger P2-05 | Expired raw body removed; audit metadata retained as documented |
 
 ## 4. 40-message evaluation set

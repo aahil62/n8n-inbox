@@ -33,7 +33,7 @@
         },
         "table": {
           "__rl": true,
-          "value": "REPLACE-AIRTABLE-TABLE-ID",
+          "value": "REPLACE-EMAIL-EVENTS-TABLE-ID",
           "mode": "id"
         },
         "filterByFormula": "={{ `AND({mailbox} = \"${String($json.mailbox || \"\").replace(/\"/g, \"\\\\\\\"\")}\", {message_id} = \"${String($json.message_id || \"\").replace(/\"/g, \"\\\\\\\"\")}\")` }}",
@@ -158,7 +158,7 @@
         },
         "table": {
           "__rl": true,
-          "value": "REPLACE-AIRTABLE-TABLE-ID",
+          "value": "REPLACE-EMAIL-EVENTS-TABLE-ID",
           "mode": "id"
         },
         "columns": {
@@ -207,7 +207,7 @@
         },
         "table": {
           "__rl": true,
-          "value": "REPLACE-AIRTABLE-TABLE-ID",
+          "value": "REPLACE-EMAIL-EVENTS-TABLE-ID",
           "mode": "id"
         },
         "columns": {
@@ -262,7 +262,7 @@
       "parameters": {
         "workflowId": {
           "__rl": true,
-          "value": "REPLACE-SUBWORKFLOW-ID",
+          "value": "REPLACE-P2-TRIAGE-WORKFLOW-ID",
           "mode": "id",
           "cachedResultName": "[E2E] P2-02 AI Triage Core"
         },
@@ -296,7 +296,7 @@
       "parameters": {
         "workflowId": {
           "__rl": true,
-          "value": "REPLACE-SUBWORKFLOW-ID",
+          "value": "REPLACE-P2-HANDOFF-WORKFLOW-ID",
           "mode": "id",
           "cachedResultName": "[E2E] P2-03 Draft, Task & Alert Handoff"
         },
@@ -325,7 +325,7 @@
         },
         "table": {
           "__rl": true,
-          "value": "REPLACE-AIRTABLE-TABLE-ID",
+          "value": "REPLACE-EMAIL-EVENTS-TABLE-ID",
           "mode": "id"
         },
         "columns": {

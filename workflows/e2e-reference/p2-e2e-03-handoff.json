@@ -28,7 +28,7 @@
         },
         "table": {
           "__rl": true,
-          "value": "REPLACE-AIRTABLE-TABLE-ID",
+          "value": "REPLACE-EMAIL-EVENTS-TABLE-ID",
           "mode": "id"
         },
         "filterByFormula": "={{ `{message_id} = \"${$json.message_id}\"` }}",
@@ -289,7 +289,7 @@
         },
         "table": {
           "__rl": true,
-          "value": "REPLACE-AIRTABLE-TABLE-ID",
+          "value": "REPLACE-DEAD-LETTER-TABLE-ID",
           "mode": "id"
         },
         "columns": {
@@ -335,7 +335,7 @@
         },
         "table": {
           "__rl": true,
-          "value": "REPLACE-AIRTABLE-TABLE-ID",
+          "value": "REPLACE-EMAIL-EVENTS-TABLE-ID",
           "mode": "id"
         },
         "columns": {

@@ -51,7 +51,7 @@
         },
         "table": {
           "__rl": true,
-          "value": "REPLACE-TABLE-ID",
+          "value": "REPLACE-EMAIL-EVENTS-TABLE-ID",
           "mode": "id"
         },
         "filterByFormula": "={{ `{message_id} = \"${$json.message_id}\"` }}",
@@ -176,7 +176,7 @@
         },
         "table": {
           "__rl": true,
-          "value": "REPLACE-TABLE-ID",
+          "value": "REPLACE-EMAIL-EVENTS-TABLE-ID",
           "mode": "id"
         },
         "columns": {
@@ -218,7 +218,7 @@
         },
         "table": {
           "__rl": true,
-          "value": "REPLACE-TABLE-ID",
+          "value": "REPLACE-EMAIL-EVENTS-TABLE-ID",
           "mode": "id"
         },
         "columns": {
@@ -266,7 +266,7 @@
       "parameters": {
         "workflowId": {
           "__rl": true,
-          "value": "REPLACE-SUBWORKFLOW-ID",
+          "value": "REPLACE-P2-TRIAGE-WORKFLOW-ID",
           "mode": "id",
           "cachedResultName": "P2-02 AI Triage and Draft Core"
         },
@@ -300,7 +300,7 @@
       "parameters": {
         "workflowId": {
           "__rl": true,
-          "value": "REPLACE-SUBWORKFLOW-ID",
+          "value": "REPLACE-P2-HANDOFF-WORKFLOW-ID",
           "mode": "id",
           "cachedResultName": "P2-03 Review and Task Handoff"
         },
@@ -329,7 +329,7 @@
         },
         "table": {
           "__rl": true,
-          "value": "REPLACE-TABLE-ID",
+          "value": "REPLACE-EMAIL-EVENTS-TABLE-ID",
           "mode": "id"
         },
         "columns": {
