@@ -1,0 +1,78 @@
+{
+  "name": "[E2E TEST] P2 Canonical Email Harness",
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "p2-e2e-harness-trigger",
+      "name": "Manual Test",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -700,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = {\n  \"label\": \"INBOX\",\n  \"messageId\": \"<normal-002@northstar.example>\",\n  \"threadId\": \"thread-normal-002\",\n  \"from\": \"Jordan Lee <jordan@globex.example>\",\n  \"fromName\": \"Jordan Lee\",\n  \"fromEmail\": \"jordan@globex.example\",\n  \"to\": [\n    \"ops@northstar.example\"\n  ],\n  \"subject\": \"Question about last week's campaign report\",\n  \"textPlain\": \"Hi, thanks for the campaign report you sent last Friday. I had a couple of questions about the conversion metrics on page 3 — could you walk me through how the attribution model was applied? Happy to hop on a call this week if easier.\",\n  \"textHtml\": \"<html><body><p>Hi, thanks for the campaign report you sent last Friday. I had a couple of questions about the conversion metrics on page 3 — could you walk me through how the attribution model was applied? Happy to hop on a call this week if easier.</p></body></html>\",\n  \"receivedDate\": \"2026-07-15T10:30:00+05:30\",\n  \"attachments\": []\n};\nconst mailbox = String(input.mailbox || 'TEST');\nconst message_id = String(input.messageId || input.message_id || 'fixture-' + Date.now());\nconst received_at = input.receivedDate || input.received_at || new Date().toISOString();\nreturn [{ json: {\n  correlation_id: 'fixture-' + Date.now(),\n  idempotency_key: mailbox + ':' + message_id,\n  mailbox,\n  message_id,\n  gmail_message_id: '',\n  thread_id: input.threadId || input.thread_id || null,\n  from_name: input.fromName || '',\n  from_email: String(input.fromEmail || input.from_email || '').toLowerCase(),\n  to: Array.isArray(input.to) ? input.to : [String(input.to || 'REPLACE-OWNER-EMAIL')],\n  subject: input.subject || '(no subject)',\n  text_body: input.textPlain || input.text_body || input.body || '',\n  received_at,\n  attachment_metadata: input.attachments || [],\n  source_link: null,\n  content_hash: 'fixture',\n  body_truncated: false,\n  oversized_attachments: [],\n  retention_expires_at: new Date(Date.parse(received_at) + 30 * 86400000).toISOString()\n} }];"
+      },
+      "id": "p2-e2e-harness-fixture",
+      "name": "Build Canonical Fixture",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -480,
+        0
+      ],
+      "notes": "Replace only this fixture payload for deterministic tests. The Gmail runtime workflow has no test filter or pinned data."
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "REPLACE-SUBWORKFLOW-ID",
+          "mode": "id",
+          "cachedResultName": "[E2E] P2-01C Canonical Email Processor"
+        },
+        "mode": "each",
+        "options": {}
+      },
+      "id": "p2-e2e-harness-call",
+      "name": "Call Canonical Processor",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.1,
+      "position": [
+        -240,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Manual Test": {
+      "main": [
+        [
+          {
+            "node": "Build Canonical Fixture",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Canonical Fixture": {
+      "main": [
+        [
+          {
+            "node": "Call Canonical Processor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

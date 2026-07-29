@@ -38,6 +38,25 @@ flowchart LR
 | P2-05 | [`p2-retention-health-sweep.json`](workflows/p2-retention-health-sweep.json) | Retention cleanup and health reporting |
 | P0-99 | [`shared-error-handler.json`](workflows/shared-error-handler.json) | Shared audit, alert, redaction, and dead-letter handling |
 
+## Controlled E2E reference workflows
+
+These inactive exports capture the callable workflow chain used for the newer
+controlled Gmail, duplicate, and safety-path tests. They complement the stable
+master package above; the harnesses and callable copies are not additional
+production entry points.
+
+| ID | Workflow | Responsibility |
+|---|---|---|
+| P2-E2E-00 | [`p2-e2e-00-test-harness.json`](workflows/e2e-reference/p2-e2e-00-test-harness.json) | Manual normal-path test harness |
+| P2-E2E-00R | [`p2-e2e-00-review-test-harness.json`](workflows/e2e-reference/p2-e2e-00-review-test-harness.json) | Manual safety and review-path test harness |
+| P2-E2E-01 | [`p2-e2e-01-gmail-adapter.json`](workflows/e2e-reference/p2-e2e-01-gmail-adapter.json) | Corrected Gmail Trigger adapter |
+| P2-E2E-01C | [`p2-e2e-01c-processor.json`](workflows/e2e-reference/p2-e2e-01c-processor.json) | Canonical email processor with duplicate protection |
+| P2-E2E-02 | [`p2-e2e-02-triage-core.json`](workflows/e2e-reference/p2-e2e-02-triage-core.json) | Callable AI triage and safe-draft core |
+| P2-E2E-03 | [`p2-e2e-03-handoff.json`](workflows/e2e-reference/p2-e2e-03-handoff.json) | Callable Gmail draft, task, and owner-alert handoff |
+| P2-E2E-04 | [`p2-e2e-04-daily-brief.json`](workflows/e2e-reference/p2-e2e-04-daily-brief.json) | Callable daily operations brief |
+| P2-E2E-05 | [`p2-e2e-05-retention-health.json`](workflows/e2e-reference/p2-e2e-05-retention-health.json) | Callable retention and health sweep |
+
+
 ## Reliability controls
 
 - canonical input normalization and explicit validation
@@ -51,13 +70,13 @@ flowchart LR
 
 ## Verified scope
 
-A representative Gmail message passed through AI triage, grounded draft creation, Airtable tracking, and Asana task handoff.
+Controlled live paths passed for normal Gmail processing, duplicate replay, and sensitive or prompt-injection review routing. The accepted path created a reviewable Gmail draft, an Asana task, and Airtable state without automatically sending the AI-written reply.
 
 This is representative live-path evidence, not a claim that every production scenario has passed.
 
 ## Known limit
 
-The full 15-scenario failure matrix and the labeled 40-message evaluation set are included but have not been run live as a complete production gate.
+Four of the 15 end-to-end scenarios have passed. The remaining 11 scenarios and the labeled 40-message evaluation set have not been run live as a complete production gate.
 
 ## Review the repository
 

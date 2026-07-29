@@ -1,0 +1,537 @@
+{
+  "name": "[E2E] P2-01C Canonical Email Processor",
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "errorWorkflow": "REPLACE-SHARED-ERROR-WORKFLOW-ID"
+  },
+  "nodes": [
+    {
+      "parameters": {
+        "inputSource": "passthrough",
+        "returnOutput": "lastRunOnly",
+        "description": "Accepts the canonical email contract from the Gmail adapter or test harness."
+      },
+      "id": "p2-e2e-processor-trigger",
+      "name": "On Canonical Email",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -1120,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "airtableTokenApi",
+        "resource": "record",
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "REPLACE-AIRTABLE-BASE-ID",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "REPLACE-AIRTABLE-TABLE-ID",
+          "mode": "id"
+        },
+        "filterByFormula": "={{ `AND({mailbox} = \"${String($json.mailbox || \"\").replace(/\"/g, \"\\\\\\\"\")}\", {message_id} = \"${String($json.message_id || \"\").replace(/\"/g, \"\\\\\\\"\")}\")` }}",
+        "limit": 1,
+        "options": {},
+        "returnAll": false
+      },
+      "id": "p2-intake-dedup",
+      "name": "Idempotency Check",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        -220,
+        0
+      ],
+      "alwaysOutputData": true,
+      "notes": "Message-ID idempotency: checks email_events by idempotency_key (mailbox:message-id). Duplicates stop here."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ !!$('Idempotency Check').first().json.id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "p2-intake-exists-if",
+      "name": "Already Processed?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        20,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const rec = $('Idempotency Check').first().json || {};\nconst fields = rec.fields || rec;\nreturn [{ json: {\n  outcome: 'duplicate',\n  correlation_id: fields.correlation_id || '',\n  idempotency_key: fields.idempotency_key || '',\n  message_id: fields.message_id || '',\n  processing_status: fields.processing_status || 'received',\n  draft_id: fields.draft_id || '',\n  task_id: fields.task_id || '',\n  message: 'Message already processed; no duplicate draft, task, or alert created.'\n}}];"
+      },
+      "id": "p2-intake-duplicate-stop",
+      "name": "Return Duplicate Stop",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        260,
+        240
+      ],
+      "notes": "Terminal: duplicate delivery creates no duplicate side effects (P2-E2E-005)."
+    },
+    {
+      "parameters": {
+        "jsCode": "const j = $('On Canonical Email').item.json;\nconst config = {\n  vip_domains: [],\n  vip_senders: [],\n  newsletter_senders: [],\n  newsletter_subject_patterns: ['unsubscribe', 'weekly digest', 'newsletter', 'special offer'],\n  blocked_senders: []\n};\nconst email = String(j.from_email || '').toLowerCase();\nconst subject = String(j.subject || '').toLowerCase();\nconst domain = email.split('@')[1] || '';\nconst validationErrors = [];\nif (!j.message_id) validationErrors.push('missing_message_id');\nif (!email || !email.includes('@')) validationErrors.push('missing_or_invalid_sender');\nlet vip = false;\nlet newsletter = false;\nlet blocked = false;\nlet rule = 'proceed';\nif (config.blocked_senders.includes(email)) {\n  blocked = true;\n  rule = 'blocked';\n} else if (validationErrors.length) {\n  rule = 'invalid_input';\n} else {\n  vip = config.vip_senders.includes(email) || config.vip_domains.includes(domain);\n  newsletter =\n    config.newsletter_senders.includes(email) ||\n    config.newsletter_subject_patterns.some((pattern) => subject.includes(pattern));\n  if (newsletter) rule = 'newsletter';\n  else if (vip) rule = 'vip';\n}\nreturn [{ json: {\n  ...j,\n  rules: { vip, newsletter, blocked, rule },\n  validation_errors: validationErrors,\n  rejection_status: blocked ? 'blocked' : (validationErrors.length ? 'invalid_input' : ''),\n  rejection_error_code: blocked ? 'blocked_sender' : (validationErrors[0] || ''),\n  proceed: !blocked && validationErrors.length === 0\n} }];"
+      },
+      "id": "p2-intake-rules",
+      "name": "Deterministic Rules",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        260,
+        -120
+      ],
+      "notes": "Deterministic rules BEFORE AI: VIP sender/domain, newsletter/promotion, and blocked-sender classification. Blocked senders stop; newsletter and VIP labels are passed to the triage core. Config lives in this Code node (swappable per client)."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.proceed }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "p2-intake-proceed-if",
+      "name": "Proceed to Triage?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        500,
+        -120
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "airtableTokenApi",
+        "resource": "record",
+        "operation": "create",
+        "base": {
+          "__rl": true,
+          "value": "REPLACE-AIRTABLE-BASE-ID",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "REPLACE-AIRTABLE-TABLE-ID",
+          "mode": "id"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "message_id": "={{ $('Deterministic Rules').item.json.message_id }}",
+            "mailbox": "={{ $('Deterministic Rules').item.json.mailbox }}",
+            "thread_id": "={{ $('Deterministic Rules').item.json.thread_id }}",
+            "received_at": "={{ $('Deterministic Rules').item.json.received_at }}",
+            "content_hash": "={{ $('Deterministic Rules').item.json.content_hash }}",
+            "processing_status": "={{ $('Deterministic Rules').item.json.rejection_status }}",
+            "retention_expires_at": "={{ $('Deterministic Rules').item.json.retention_expires_at }}",
+            "last_error_code": "={{ $('Deterministic Rules').item.json.rejection_error_code }}",
+            "correlation_id": "={{ $('Deterministic Rules').item.json.correlation_id }}",
+            "idempotency_key": "={{ $('Deterministic Rules').item.json.idempotency_key }}",
+            "from_name": "={{ $('Deterministic Rules').item.json.from_name }}",
+            "from_email": "={{ $('Deterministic Rules').item.json.from_email }}",
+            "subject": "={{ $('Deterministic Rules').item.json.subject }}",
+            "text_body": "={{ $('Deterministic Rules').item.json.text_body }}",
+            "source_link": "={{ $('Deterministic Rules').item.json.source_link }}"
+          },
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      },
+      "id": "p2-intake-write-blocked",
+      "name": "Write Blocked Event",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        740,
+        120
+      ],
+      "notes": "Blocked sender: audited and stopped. No triage, draft, task, or alert."
+    },
+    {
+      "parameters": {
+        "authentication": "airtableTokenApi",
+        "resource": "record",
+        "operation": "create",
+        "base": {
+          "__rl": true,
+          "value": "REPLACE-AIRTABLE-BASE-ID",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "REPLACE-AIRTABLE-TABLE-ID",
+          "mode": "id"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "message_id": "={{ $('Deterministic Rules').item.json.message_id }}",
+            "mailbox": "={{ $('Deterministic Rules').item.json.mailbox }}",
+            "thread_id": "={{ $('Deterministic Rules').item.json.thread_id }}",
+            "received_at": "={{ $('Deterministic Rules').item.json.received_at }}",
+            "content_hash": "={{ $('Deterministic Rules').item.json.content_hash }}",
+            "processing_status": "received",
+            "retention_expires_at": "={{ $('Deterministic Rules').item.json.retention_expires_at }}",
+            "correlation_id": "={{ $('Deterministic Rules').item.json.correlation_id }}",
+            "idempotency_key": "={{ $('Deterministic Rules').item.json.idempotency_key }}",
+            "from_name": "={{ $('Deterministic Rules').item.json.from_name }}",
+            "from_email": "={{ $('Deterministic Rules').item.json.from_email }}",
+            "subject": "={{ $('Deterministic Rules').item.json.subject }}",
+            "text_body": "={{ $('Deterministic Rules').item.json.text_body }}",
+            "source_link": "={{ $('Deterministic Rules').item.json.source_link }}"
+          },
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      },
+      "id": "p2-intake-write-event",
+      "name": "Write email_events",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        740,
+        -240
+      ],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "notes": "Writes the email_events record with processing_status: received before triage. The record id flows forward as email_event_id."
+    },
+    {
+      "parameters": {
+        "jsCode": "const ev = $('Write email_events').first().json || {};\nconst j = $('Deterministic Rules').item.json;\nreturn [{ json: {\n  correlation_id: j.correlation_id,\n  idempotency_key: j.idempotency_key,\n  email_event_id: ev.id || '',\n  mailbox: j.mailbox,\n  message_id: j.message_id,\n  thread_id: j.thread_id,\n  from_name: j.from_name,\n  from_email: j.from_email,\n  to: j.to,\n  subject: j.subject,\n  text_body: j.text_body,\n  received_at: j.received_at,\n  attachment_metadata: j.attachment_metadata,\n  source_link: j.source_link,\n  rules: j.rules\n}}];"
+      },
+      "id": "p2-intake-prep-triage",
+      "name": "Prepare Triage Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        980,
+        -240
+      ]
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "REPLACE-SUBWORKFLOW-ID",
+          "mode": "id",
+          "cachedResultName": "[E2E] P2-02 AI Triage Core"
+        },
+        "mode": "each",
+        "options": {}
+      },
+      "id": "p2-intake-call-triage",
+      "name": "Call Triage Core",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.1,
+      "position": [
+        1220,
+        -240
+      ],
+      "notes": "After import, bind this node to P2-02 AI Triage and Draft Core workflow ID. The public export uses a placeholder workflow ID."
+    },
+    {
+      "parameters": {
+        "jsCode": "const email = $('Prepare Triage Input').item.json;\nconst triage = $input.first().json || {};\nreturn [{ json: {\n  ...email,\n  triage: {\n    review_required: !!triage.review_required,\n    gate_reason: triage.gate_reason || '',\n    category: triage.category || '',\n    importance: triage.importance || '',\n    needs_reply: !!triage.needs_reply,\n    needs_task: !!triage.needs_task,\n    summary: triage.summary || '',\n    draft_reply: triage.draft_reply || '',\n    suggested_due_at: triage.suggested_due_at || null,\n    confidence: triage.confidence,\n    sensitive: !!triage.sensitive,\n    safety_reason: triage.safety_reason || null,\n    review_queue_id: triage.review_queue_id || ''\n  }\n}}];"
+      },
+      "id": "p2-intake-build-handoff",
+      "name": "Build Handoff Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1460,
+        -240
+      ]
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "REPLACE-SUBWORKFLOW-ID",
+          "mode": "id",
+          "cachedResultName": "[E2E] P2-03 Draft, Task & Alert Handoff"
+        },
+        "mode": "each",
+        "options": {}
+      },
+      "id": "p2-intake-call-handoff",
+      "name": "Call Review & Task Handoff",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.1,
+      "position": [
+        1700,
+        -240
+      ],
+      "notes": "After import, bind this node to P2-03 Review and Task Handoff workflow ID. Called for every triaged message (accepted and review_required); P2-03 decides which side effects to create. The public export uses a placeholder workflow ID."
+    },
+    {
+      "parameters": {
+        "authentication": "airtableTokenApi",
+        "resource": "record",
+        "operation": "update",
+        "base": {
+          "__rl": true,
+          "value": "REPLACE-AIRTABLE-BASE-ID",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "REPLACE-AIRTABLE-TABLE-ID",
+          "mode": "id"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "category": "={{ $('Call Triage Core').item.json.category }}",
+            "importance": "={{ $('Call Triage Core').item.json.importance }}",
+            "confidence": "={{ $('Call Triage Core').item.json.confidence }}",
+            "processing_status": "={{ $('Call Triage Core').item.json.review_required ? 'review_required' : ($('Call Review & Task Handoff').item.json.final_status === 'handoff_complete' ? 'completed' : 'failed') }}",
+            "draft_id": "={{ $('Call Review & Task Handoff').item.json.draft_id || '' }}",
+            "task_id": "={{ $('Call Review & Task Handoff').item.json.task_id || '' }}",
+            "last_error_code": "={{ $('Call Review & Task Handoff').item.json.task_error_code || $('Call Review & Task Handoff').item.json.draft_error || $('Call Review & Task Handoff').item.json.alert_error || '' }}",
+            "id": "={{ $json.email_event_id }}"
+          },
+          "matchingColumns": [
+            "id"
+          ],
+          "schema": []
+        },
+        "options": {}
+      },
+      "id": "p2-intake-update-event",
+      "name": "Update email_events Final State",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        1940,
+        -240
+      ],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "notes": "Updates email_events with triage category/importance/confidence, handoff draft_id/task_id, and final processing_status. External-write states (draft_id, task_id) are written only after the handoff returns."
+    },
+    {
+      "parameters": {
+        "jsCode": "const email = $('Prepare Triage Input').item.json;\nconst triage = $('Call Triage Core').first().json || {};\nconst handoff = $('Call Review & Task Handoff').first().json || {};\nreturn [{ json: {\n  correlation_id: email.correlation_id,\n  idempotency_key: email.idempotency_key,\n  message_id: email.message_id,\n  email_event_id: email.email_event_id,\n  outcome: triage.review_required ? 'review_required' : 'processed',\n  category: triage.category || '',\n  importance: triage.importance || '',\n  needs_reply: !!triage.needs_reply,\n  needs_task: !!triage.needs_task,\n  sensitive: !!triage.sensitive,\n  confidence: triage.confidence,\n  draft_id: handoff.draft_id || '',\n  draft_error: handoff.draft_error || '',\n  task_id: handoff.task_id || '',\n  task_status: handoff.task_status || '',\n  task_error_code: handoff.task_error_code || '',\n  alert_sent: !!handoff.alert_sent,\n  alert_error: handoff.alert_error || '',\n  review_queue_id: triage.review_queue_id || handoff.review_queue_id || '',\n  final_status: triage.review_required ? 'review_required_no_external_actions' : (handoff.final_status || 'handoff_unknown')\n}}];"
+      },
+      "id": "p2-intake-final",
+      "name": "Final Intake Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2180,
+        -240
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const j = $('Deterministic Rules').item.json;\nconst rec = $('Write Blocked Event').first().json || {};\nreturn [{ json: {\n  correlation_id: j.correlation_id,\n  idempotency_key: j.idempotency_key,\n  message_id: j.message_id,\n  email_event_id: rec.id || '',\n  outcome: j.rejection_status,\n  error_code: j.rejection_error_code,\n  validation_errors: j.validation_errors,\n  final_status: 'rejected_before_ai_or_external_actions'\n}}];"
+      },
+      "id": "p2-e2e-return-rejected",
+      "name": "Return Rejected Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -80,
+        520
+      ]
+    }
+  ],
+  "connections": {
+    "Idempotency Check": {
+      "main": [
+        [
+          {
+            "node": "Already Processed?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Already Processed?": {
+      "main": [
+        [
+          {
+            "node": "Return Duplicate Stop",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Deterministic Rules",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Deterministic Rules": {
+      "main": [
+        [
+          {
+            "node": "Proceed to Triage?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Proceed to Triage?": {
+      "main": [
+        [
+          {
+            "node": "Write email_events",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Write Blocked Event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Write email_events": {
+      "main": [
+        [
+          {
+            "node": "Prepare Triage Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Triage Input": {
+      "main": [
+        [
+          {
+            "node": "Call Triage Core",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Triage Core": {
+      "main": [
+        [
+          {
+            "node": "Build Handoff Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Handoff Input": {
+      "main": [
+        [
+          {
+            "node": "Call Review & Task Handoff",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Review & Task Handoff": {
+      "main": [
+        [
+          {
+            "node": "Update email_events Final State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update email_events Final State": {
+      "main": [
+        [
+          {
+            "node": "Final Intake Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "On Canonical Email": {
+      "main": [
+        [
+          {
+            "node": "Idempotency Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Write Blocked Event": {
+      "main": [
+        [
+          {
+            "node": "Return Rejected Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

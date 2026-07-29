@@ -75,13 +75,15 @@ importance, confidence, processing_status, draft_id, task_id,
 reported_at, retention_expires_at, last_error_code
 ```
 
-Additional operational fields used by the workflows: `correlation_id`, `idempotency_key`, `from_name`, `from_email`, `subject`, `text_body`, `source_link`, `retention_status`, `updated_at`.
+Additional operational fields used by the workflows: `correlation_id`,
+`idempotency_key`, `from_name`, `from_email`, `subject`, `text_body`,
+`source_link`, and `retention_status`.
 
 ### State semantics
 
 | Field | Values | Set by |
 |---|---|---|
-| `processing_status` | `received` → `blocked` \| `triaged` \| `review_required` \| `failed` | P2-01 sets `received`/`blocked`; P2-01 final update sets `triaged`/`review_required` |
+| `processing_status` | `received` → `blocked` \| `completed` \| `review_required` \| `failed` | P2-01C sets `received`/`blocked`; its final update sets the terminal state |
 | `draft_id` | `""` → Gmail draft id | P2-03 after a draft is created; preserved on Asana failure |
 | `task_id` | `""` → Asana task gid | P2-03 only after a verified Asana task ID exists; `failed` on Asana API failure |
 | `reported_at` | `""` → ISO-8601 | P2-04 **only after** successful brief delivery |
@@ -99,7 +101,11 @@ review_id, message_id, reason, draft_text, status, assigned_to,
 created_at, reviewed_at, final_action
 ```
 
-Plus `correlation_id` for traceability. Written by P2-02 when the confidence/safety gate fails (sensitive, low-confidence, malformed, LLM timeout). The `draft_text` holds the AI draft for a person to inspect and edit — **never auto-sent**. No Asana task is auto-created for review_required items.
+`review_id` is derived from the correlation ID for traceability. P2-02 writes
+the row when the confidence/safety gate fails (sensitive, low-confidence,
+malformed, or LLM timeout). The `draft_text` holds the AI draft for a person
+to inspect and edit — **never auto-sent**. No Asana task is auto-created for
+`review_required` items.
 
 ## 4. Shared tables (§8.2)
 
@@ -144,7 +150,12 @@ Base: `REPLACE-AIRTABLE-BASE-ID` ("Portfolio Automation OS").
 
 ## 7. Notification contracts
 
-- **Urgent alert (P2-03):** Slack message to the `urgent-inbox-alerts` channel. Sent only for configured urgent conditions (high importance + client_request/billing). Contains category, sender, subject, source link, summary.
-- **Daily brief (P2-04):** Slack message to the `daily-operations-brief` channel. Built from stored email_events + Asana tasks. Contains urgent mail count, pending drafts, open/overdue tasks.
-- **Health report (P2-05):** Slack message to the `inbox-health` channel. Contains redacted count, failed/review/unprocessed counts, and lists of failed + open-review records.
-- All notification nodes are built with correct types/parameters; credentials are bound by a controlled test run. A notification failure does not erase already-created side effects.
+- **Urgent alert (P2-03):** Gmail message to the configured owner mailbox.
+  Sent only for configured urgent conditions. Contains category, sender,
+  subject, source link, summary, and correlation ID.
+- **Daily brief (P2-04):** Gmail message to the owner mailbox, built from
+  stored `email_events` and Asana tasks.
+- **Health report (P2-05):** Gmail message to the owner mailbox with retention,
+  failure, and review counts.
+- Notification failures do not erase already-created drafts or tasks. AI reply
+  content is still created only as a draft and is never automatically sent.
