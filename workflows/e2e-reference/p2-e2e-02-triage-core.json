@@ -47,8 +47,8 @@
       ],
       "retryOnFail": true,
       "maxTries": 2,
-      "continueOnFail": true,
-      "notes": "continueOnFail so an LLM timeout or malformed output routes to review instead of crashing the workflow. The model has no email-send, file-delete, payment, or account-change tool."
+      "onError": "continueRegularOutput",
+      "notes": "The regular-output error policy routes an LLM timeout or malformed output to review instead of crashing the workflow. The model has no email-send, file-delete, payment, or account-change tool."
     },
     {
       "parameters": {

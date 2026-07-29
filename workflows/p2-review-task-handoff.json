@@ -111,8 +111,8 @@
         180,
         -120
       ],
-      "continueOnFail": true,
-      "notes": "Creates a reviewable Gmail draft (never auto-send). credentials required after import. Fallback if this Gmail draft operation is unsupported in the n8n version: store the draft text in the review_queue Airtable record instead (still never auto-send). continueOnFail so a draft failure does not block the Asana task."
+      "onError": "continueRegularOutput",
+      "notes": "Creates a reviewable Gmail draft (never auto-send). credentials required after import. Fallback if this Gmail draft operation is unsupported in the n8n version: store the draft text in the review_queue Airtable record instead (still never auto-send). The regular-output error policy means a draft failure does not block the Asana task."
     },
     {
       "parameters": {
@@ -170,8 +170,8 @@
         620,
         -120
       ],
-      "continueOnFail": true,
-      "notes": "Upserts an Asana task in project REPLACE-ASANA-PROJECT-ID with source link, summary, mailbox, correlation ID, and due date. Task name includes the Message-ID-derived idempotency key so reruns cannot duplicate tasks. continueOnFail so an Asana failure preserves the draft and is handled below."
+      "onError": "continueRegularOutput",
+      "notes": "Upserts an Asana task in project REPLACE-ASANA-PROJECT-ID with source link, summary, mailbox, correlation ID, and due date. Task name includes the Message-ID-derived idempotency key so reruns cannot duplicate tasks. The regular-output error policy means an Asana failure preserves the draft and is handled below."
     },
     {
       "parameters": {
