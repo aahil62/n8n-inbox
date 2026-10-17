@@ -15,3 +15,11 @@ Do not describe the package as fully production-ready until the documented matri
 ## Test assets
 
 15 end-to-end scenarios plus a labeled 40-message triage evaluation set.
+
+## Model-provider status
+
+| Provider | Status |
+|---|---|
+| Groq-hosted model via an OpenAI-compatible endpoint | Used for the live test runs |
+| OpenAI | Compatible with the same node configuration; test before claiming verified |
+| Anthropic/Claude | Not verified in this package |
