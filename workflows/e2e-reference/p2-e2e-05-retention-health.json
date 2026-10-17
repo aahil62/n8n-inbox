@@ -40,7 +40,7 @@
           "value": "REPLACE-EMAIL-EVENTS-TABLE-ID",
           "mode": "id"
         },
-        "filterByFormula": "AND({retention_expires_at} != BLANK(), IS_BEFORE({retention_expires_at}, NOW()))",
+        "filterByFormula": "AND({retention_expires_at} != BLANK(), IS_BEFORE({retention_expires_at}, NOW()), {retention_status} != 'redacted')",
         "limit": 100,
         "options": {},
         "returnAll": false
@@ -55,6 +55,40 @@
       ],
       "alwaysOutputData": true,
       "notes": "Finds email_events whose retention_expires_at is in the past and still have a raw text_body. Documented retention = 30 days from received_at (set at intake)."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ !!$json.id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "p2-sweep-any-expired-if",
+      "name": "Any Expired Rows?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -220,
+        0
+      ],
+      "notes": "Skips the redaction update when no rows have expired (the search returns one empty item)."
     },
     {
       "parameters": {
@@ -74,7 +108,9 @@
         "columns": {
           "mappingMode": "defineBelow",
           "value": {
-            "processing_status": "retention_expired_metadata_only",
+            "text_body": "",
+            "summary": "",
+            "retention_status": "redacted",
             "id": "={{ $json.id }}"
           },
           "matchingColumns": [
@@ -89,7 +125,7 @@
       "type": "n8n-nodes-base.airtable",
       "typeVersion": 2.2,
       "position": [
-        -220,
+        20,
         0
       ],
       "retryOnFail": true,
@@ -121,22 +157,23 @@
       "type": "n8n-nodes-base.airtable",
       "typeVersion": 2.2,
       "position": [
-        20,
+        260,
         0
       ],
       "alwaysOutputData": true,
-      "notes": "Reports stuck/failed records: processing_status in failed, review_required (open review), or received (not yet triaged)."
+      "notes": "Reports stuck/failed records: processing_status in failed, review_required (open review), or received (not yet triaged).",
+      "executeOnce": true
     },
     {
       "parameters": {
-        "jsCode": "const redacted = $('Get Expired email_events').all().length;\nconst stuck = $input.all().map(i => { const f = i.json.fields || i.json; return { id: i.json.id || '', message_id: f.message_id || '', processing_status: f.processing_status || '', received_at: f.received_at || '', subject: f.subject || '' }; });\nconst failed = stuck.filter(r => r.processing_status === 'failed');\nconst review = stuck.filter(r => r.processing_status === 'review_required');\nconst unprocessed = stuck.filter(r => r.processing_status === 'received');\nlet report = 'Retention & Health Sweep — ' + new Date().toDateString() + '\\n\\n';\nreport += 'Records redacted (expired bodies removed): ' + redacted + '\\n';\nreport += 'Failed records: ' + failed.length + '\\n';\nreport += 'Open review_required records: ' + review.length + '\\n';\nreport += 'Unprocessed (received) records: ' + unprocessed.length + '\\n';\nif (failed.length) { report += '\\nFailed (need replay):\\n' + failed.map(r => '  • ' + r.message_id + ' — ' + r.subject).join('\\n'); }\nif (review.length) { report += '\\nOpen reviews (need human action):\\n' + review.map(r => '  • ' + r.message_id + ' — ' + r.subject).join('\\n'); }\nreturn [{ json: { report_text: report, redacted_count: redacted, failed_count: failed.length, review_count: review.length, unprocessed_count: unprocessed.length, failed_records: failed, review_records: review } }];"
+        "jsCode": "const safeAll = name => { try { return $(name).all(); } catch (e) { return []; } };\nconst redacted = safeAll('Redact Expired Bodies').filter(i => i.json && i.json.id).length;\nconst stuck = $input.all().filter(i => i.json && i.json.id).map(i => { const f = i.json.fields || i.json; return { id: i.json.id || '', message_id: f.message_id || '', processing_status: f.processing_status || '', received_at: f.received_at || '', subject: f.subject || '' }; });\nconst failed = stuck.filter(r => r.processing_status === 'failed');\nconst review = stuck.filter(r => r.processing_status === 'review_required');\nconst unprocessed = stuck.filter(r => r.processing_status === 'received');\nlet report = 'Retention & Health Sweep — ' + new Date().toDateString() + '\\n\\n';\nreport += 'Records redacted (text_body and summary cleared): ' + redacted + '\\n';\nreport += 'Failed records: ' + failed.length + '\\n';\nreport += 'Open review_required records: ' + review.length + '\\n';\nreport += 'Unprocessed (received) records: ' + unprocessed.length + '\\n';\nif (failed.length) { report += '\\nFailed (need replay):\\n' + failed.map(r => '  • ' + r.message_id + ' — ' + r.subject).join('\\n'); }\nif (review.length) { report += '\\nOpen reviews (need human action):\\n' + review.map(r => '  • ' + r.message_id + ' — ' + r.subject).join('\\n'); }\nreturn [{ json: { report_text: report, redacted_count: redacted, failed_count: failed.length, review_count: review.length, unprocessed_count: unprocessed.length, failed_records: failed, review_records: review } }];"
       },
       "id": "p2-sweep-build-report",
       "name": "Build Health Report",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        260,
+        500,
         0
       ],
       "notes": "Deterministic health report from stored state. No AI."
@@ -158,7 +195,7 @@
       "type": "n8n-nodes-base.gmail",
       "typeVersion": 2.1,
       "position": [
-        500,
+        740,
         0
       ],
       "continueOnFail": true,
@@ -173,7 +210,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        740,
+        980,
         0
       ]
     }
@@ -194,7 +231,7 @@
       "main": [
         [
           {
-            "node": "Redact Expired Bodies",
+            "node": "Any Expired Rows?",
             "type": "main",
             "index": 0
           }
@@ -239,6 +276,24 @@
         [
           {
             "node": "Build Sweep Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Any Expired Rows?": {
+      "main": [
+        [
+          {
+            "node": "Redact Expired Bodies",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Get Stuck/Failed Records",
             "type": "main",
             "index": 0
           }

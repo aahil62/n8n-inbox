@@ -76,11 +76,12 @@
         0
       ],
       "alwaysOutputData": true,
-      "notes": "Gets email_events not yet marked reported_at. Items remain unreported until the brief is successfully delivered (P2-E2E-012)."
+      "notes": "Gets email_events not yet marked reported_at. Items remain unreported until the brief is successfully delivered (P2-E2E-012).",
+      "executeOnce": true
     },
     {
       "parameters": {
-        "jsCode": "const esc = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nconst today = new Date().toDateString();\nconst events = $('Get Unreported email_events').all().map(i => { const f = i.json.fields || i.json; return { id: i.json.id || f.id || '', subject: f.subject || '(no subject)', from_name: f.from_name || f.from_email || '', category: f.category || 'other', importance: f.importance || 'low', needs_reply: !!f.needs_reply, message_id: f.message_id || '' }; });\nconst tasks = $('Get Asana Tasks').all().map(i => i.json).filter(t => t && !t.completed).map(t => ({ name: t.name || '(unnamed)', due_on: t.due_on || t.due_at || null, notes: String(t.notes || '').slice(0, 160) }));\nconst high = events.filter(e => e.importance === 'high');\nconst replyNeeded = events.filter(e => e.needs_reply);\nconst overdue = tasks.filter(t => t.due_on && t.due_on < new Date().toISOString().slice(0, 10));\nlet brief = 'Daily Operations Brief — ' + today + '\\n\\n';\nbrief += 'Urgent mail (' + high.length + '):\\n';\nbrief += high.length ? high.map(e => '  • [' + e.category + '] ' + e.subject + ' — from ' + e.from_name).join('\\n') : '  (none)';\nbrief += '\\n\\nDrafts awaiting review (' + replyNeeded.length + '):\\n';\nbrief += replyNeeded.length ? replyNeeded.map(e => '  • ' + e.subject + ' — from ' + e.from_name).join('\\n') : '  (none)';\nbrief += '\\n\\nOpen Asana tasks (' + tasks.length + ', overdue ' + overdue.length + '):\\n';\nbrief += tasks.length ? tasks.slice(0, 20).map(t => '  • ' + t.name + (t.due_on ? ' (due ' + t.due_on + ')' : '')).join('\\n') : '  (none)';\nif (overdue.length) { brief += '\\n\\nOverdue:\\n' + overdue.map(t => '  • ' + t.name + ' (due ' + t.due_on + ')').join('\\n'); }\nreturn [{ json: { today, brief_text: brief, brief_html: '<pre>' + esc(brief) + '</pre>', event_ids: events.map(e => ({ id: e.id, message_id: e.message_id })), high_count: high.length, reply_count: replyNeeded.length, task_count: tasks.length, overdue_count: overdue.length } }];"
+        "jsCode": "const esc = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nconst today = new Date().toDateString();\nconst events = $('Get Unreported email_events').all().map(i => { const f = i.json.fields || i.json; return { id: i.json.id || f.id || '', subject: f.subject || '(no subject)', from_name: f.from_name || f.from_email || '', category: f.category || 'other', importance: f.importance || 'low', has_draft: !!f.draft_id, message_id: f.message_id || '' }; }).filter(e => e.id);\nconst tasks = $('Get Asana Tasks').all().map(i => i.json).filter(t => t && !t.completed).map(t => ({ name: t.name || '(unnamed)', due_on: t.due_on || t.due_at || null, notes: String(t.notes || '').slice(0, 160) }));\nconst high = events.filter(e => e.importance === 'high');\nconst replyNeeded = events.filter(e => e.has_draft);\nconst overdue = tasks.filter(t => t.due_on && t.due_on < new Date().toISOString().slice(0, 10));\nlet brief = 'Daily Operations Brief — ' + today + '\\n\\n';\nbrief += 'Urgent mail (' + high.length + '):\\n';\nbrief += high.length ? high.map(e => '  • [' + e.category + '] ' + e.subject + ' — from ' + e.from_name).join('\\n') : '  (none)';\nbrief += '\\n\\nDrafts awaiting review (' + replyNeeded.length + '):\\n';\nbrief += replyNeeded.length ? replyNeeded.map(e => '  • ' + e.subject + ' — from ' + e.from_name).join('\\n') : '  (none)';\nbrief += '\\n\\nOpen Asana tasks (' + tasks.length + ', overdue ' + overdue.length + '):\\n';\nbrief += tasks.length ? tasks.slice(0, 20).map(t => '  • ' + t.name + (t.due_on ? ' (due ' + t.due_on + ')' : '')).join('\\n') : '  (none)';\nif (overdue.length) { brief += '\\n\\nOverdue:\\n' + overdue.map(t => '  • ' + t.name + ' (due ' + t.due_on + ')').join('\\n'); }\nreturn [{ json: { today, brief_text: brief, brief_html: '<pre>' + esc(brief) + '</pre>', event_ids: events.map(e => ({ id: e.id, message_id: e.message_id })), high_count: high.length, reply_count: replyNeeded.length, task_count: tasks.length, overdue_count: overdue.length } }];"
       },
       "id": "p2-brief-build",
       "name": "Build Brief",
@@ -151,6 +152,40 @@
     },
     {
       "parameters": {
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ ($('Build Brief').item.json.event_ids || []).length > 0 }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "p2-brief-any-rows-if",
+      "name": "Any Rows To Mark?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        620,
+        -120
+      ],
+      "notes": "Skips Mark Reported when there are no unreported rows, so an empty day still ends cleanly."
+    },
+    {
+      "parameters": {
         "jsCode": "const ids = $('Build Brief').item.json.event_ids || [];\nreturn ids.map(e => ({ json: { record_id: e.id, message_id: e.message_id, reported_at: new Date().toISOString() } }));"
       },
       "id": "p2-brief-mark-list",
@@ -158,8 +193,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        740,
-        -120
+        860,
+        -200
       ],
       "notes": "Outputs one item per email_event to mark reported_at. Empty list when there were no unreported items."
     },
@@ -196,8 +231,8 @@
       "type": "n8n-nodes-base.airtable",
       "typeVersion": 2.2,
       "position": [
-        980,
-        -120
+        1100,
+        -200
       ],
       "retryOnFail": true,
       "maxTries": 2,
@@ -205,14 +240,14 @@
     },
     {
       "parameters": {
-        "jsCode": "const b = $('Build Brief').first().json || {};\nconst sendNode = $('Send Brief');\nconst sendErr = sendNode.all().length && sendNode.first().json.error ? String(sendNode.first().json.error) : '';\nconst marked = $('Prepare Mark List').all().length;\nreturn [{ json: {\n  date: b.today,\n  delivered: !sendErr,\n  delivery_error: sendErr,\n  items_reported: marked,\n  high_count: b.high_count,\n  reply_count: b.reply_count,\n  task_count: b.task_count,\n  overdue_count: b.overdue_count,\n  final_status: sendErr ? 'delivery_failed_items_remain_unreported' : 'brief_delivered_items_reported'\n}}];"
+        "jsCode": "const safeAll = name => { try { return $(name).all(); } catch (e) { return []; } };\nconst b = $('Build Brief').first().json || {};\nconst sendItems = safeAll('Send Brief');\nconst sendErr = sendItems.length && sendItems[0].json.error ? String(sendItems[0].json.error) : '';\nconst marked = safeAll('Mark Reported').filter(i => i.json && i.json.id).length;\nreturn [{ json: {\n  date: b.today,\n  delivered: !sendErr,\n  delivery_error: sendErr,\n  items_reported: marked,\n  high_count: b.high_count,\n  reply_count: b.reply_count,\n  task_count: b.task_count,\n  overdue_count: b.overdue_count,\n  final_status: sendErr ? 'delivery_failed_items_remain_unreported' : (marked ? 'brief_delivered_items_reported' : 'brief_delivered_nothing_to_report')\n}}];"
       },
       "id": "p2-brief-result",
       "name": "Build Brief Result",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1220,
+        1340,
         0
       ]
     }
@@ -277,7 +312,7 @@
       "main": [
         [
           {
-            "node": "Prepare Mark List",
+            "node": "Any Rows To Mark?",
             "type": "main",
             "index": 0
           }
@@ -304,6 +339,24 @@
     },
     "Mark Reported": {
       "main": [
+        [
+          {
+            "node": "Build Brief Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Any Rows To Mark?": {
+      "main": [
+        [
+          {
+            "node": "Prepare Mark List",
+            "type": "main",
+            "index": 0
+          }
+        ],
         [
           {
             "node": "Build Brief Result",

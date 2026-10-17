@@ -338,6 +338,7 @@
             "draft_id": "={{ $('Call Review & Task Handoff').item.json.draft_id || '' }}",
             "task_id": "={{ $('Call Review & Task Handoff').item.json.task_id || '' }}",
             "last_error_code": "={{ $('Call Review & Task Handoff').item.json.task_error_code || $('Call Review & Task Handoff').item.json.draft_error || $('Call Review & Task Handoff').item.json.alert_error || '' }}",
+            "summary": "={{ $('Call Triage Core').item.json.summary || '' }}",
             "id": "={{ $json.email_event_id }}"
           },
           "matchingColumns": [

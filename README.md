@@ -33,7 +33,7 @@ flowchart LR
     G --> H["Daily brief<br/>in Slack"]
 ```
 
-1. **Collect.** New Gmail messages are picked up and cleaned. HTML, styles and scripts are stripped, quoted history is cut when it starts on its own line, and very long bodies are capped.
+1. **Collect.** New Gmail messages are picked up and cleaned. HTML, styles and scripts are stripped, quoted history ("On … wrote:") is cut, and very long bodies are capped.
 2. **Skip repeats.** Each message is checked by mailbox and Message-ID **before** any AI call or write, so a re-delivered email can't create a second draft or task.
 3. **Apply your rules.** Fixed rules run first: VIP clients are flagged, blocked senders are stopped, newsletters are marked low priority.
 4. **Triage with AI.** The model returns structured fields: category, importance, whether a reply is needed, whether a task is needed, a summary, a suggested due date, a confidence score and a sensitivity flag. The email is treated as untrusted data, and the draft is not allowed to promise prices, policies, deadlines or refunds.
@@ -86,7 +86,7 @@ Replaying the normal email returned the original draft and task IDs. No second d
 
 ## What's been tested
 
-Testing used a sandbox on 24–25 July and 17 October 2026 with fictional data, a Gmail test mailbox, Airtable, Asana, n8n, and a Groq-hosted model through an OpenAI-compatible endpoint. All 15 scenarios have been run: 8 passed, 2 passed in part and 5 failed. The failures are listed below and are not fixed yet.
+Testing used a sandbox on 24–25 July and 17 October 2026 with fictional data, a Gmail test mailbox, Airtable, Asana, n8n, and a Groq-hosted model through an OpenAI-compatible endpoint. All 15 scenarios have been run. The first full run had 8 passed, 2 partial and 5 failed; six of those were fixed and passed a live re-test the same day. Current result: 14 passed, 1 failed.
 
 | Status | Scenario |
 |---|---|
@@ -98,13 +98,13 @@ Testing used a sandbox on 24–25 July and 17 October 2026 with fictional data, 
 | ✅ Passed live | AI model failure → review queue, no draft or task; replay creates nothing new |
 | ✅ Passed live | Newsletter → caught by the newsletter rule (unsubscribe footer), low priority, no draft or task |
 | ✅ Passed live | Asana failure → draft kept, task marked failed, retryable dead-letter entry. A manual replay created the task with no second draft or alert, marked the email completed and the dead-letter entry resolved |
-| ⚠️ Partly passed | Informational email → no draft, task or alert, but the AI summary isn't saved to Airtable |
-| ⚠️ Partly passed | Malformed HTML, no sender name or subject → cleaned safely and sent to review, but quoted history in HTML-only mail wasn't removed |
+| ✅ Passed live (re-test) | Informational email → no draft, task or alert; AI summary saved to Airtable |
+| ✅ Passed live (re-test) | Malformed HTML, no sender name or subject → cleaned safely (including quoted history in HTML-only mail) and sent to review |
 | ❌ Failed | Email with attachments → the AI flagged the invoice as sensitive and sent it to review instead of drafting a reply (the cautious direction) |
-| ❌ Failed | "Deliver by end of day Thursday" received late Wednesday → task due Wednesday instead of Thursday |
-| ❌ Failed | Reply in an urgent thread ("thanks, it's fixed") → still sent an urgent alert because of "URGENT" in the quoted subject |
-| ❌ Failed | Daily brief delivery failure → items stayed unreported and were reported on retry, but each item was listed many times and the failure path ended in an error |
-| ❌ Failed | Retention sweep → old records were flagged, but the stored email body was not removed |
+| ✅ Passed live (re-test) | "Deliver by end of day Thursday" received late Wednesday (India time) → task due Thursday |
+| ✅ Passed live (re-test) | Reply in an urgent thread ("thanks, it's fixed") → draft, no task, no urgent alert ("URGENT" in a `Re:` subject no longer counts) |
+| ✅ Passed live (re-test) | Daily brief delivery failure → items stayed unreported, then appeared once each on retry and were marked reported; an empty day ends cleanly |
+| ✅ Passed live (re-test) | Retention sweep → expired email body and summary removed, record marked redacted; fresh and already-redacted records untouched |
 | ✅ Passed live | Gmail login failure (forced with an invalid test credential) → draft and alert failed safely, dead-letter entry written, critical "reconnect Gmail" Asana task created |
 | ✅ Ran live | 40 hand-labelled emails through the AI triage step. **All 6 sensitive emails were caught** (the pass bar). Category 31/40, importance 27/40, needs-reply 36/40, needs-task 37/40 matched the labels |
 
@@ -112,9 +112,9 @@ Fixtures are in [`fixtures/`](fixtures). Expected and actual results, execution 
 
 **Current limits:**
 - The urgent-alert channel is a placeholder to connect to your Slack, SMS or email. The test build sent it as a Gmail message.
-- An urgent alert needs both a high AI rating and an urgency keyword (or a VIP sender). A truly urgent email that uses none of the keywords gets a draft and task but no alert, and urgency words in a quoted `Re:` subject still count. The keyword list should be tuned per business.
-- The AI's priority, due-date and "needs a task" judgements vary between runs and can be wrong; due dates are not checked against the received time.
-- The daily brief and retention sweep have the defects listed above.
+- An urgent alert needs both a high AI rating and an urgency keyword (or a VIP sender). A truly urgent email that uses none of the keywords gets a draft and task but no alert. For replies and forwards only the body is checked. The keyword list should be tuned per business.
+- The AI's priority, due-date and "needs a task" judgements vary between runs and can be wrong. A due date that falls before the received time, or on a weekday the email doesn't mention, is dropped rather than trusted; the business timezone is set to Asia/Kolkata in the code.
+- The daily brief and health report were tested with Gmail delivery; the Slack versions in the template build were not live-tested.
 - Burst traffic hit the AI provider's rate limit in testing; affected emails went safely to review, but a busy inbox needs pacing or a higher tier.
 - Retrying a failed Asana task is a manual step for now.
 - Attachments are recorded in the run but not read or stored.

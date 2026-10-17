@@ -28,7 +28,7 @@ The shape every inbox adapter normalizes to **before any AI node**. This is the 
 - `correlation_id`: UUID-like generated in the Code node (pure JS, no `crypto`).
 - `idempotency_key`: `mailbox:message-id` (primary). Message-ID idempotency is checked against `email_events` before any side effect. Content hash is a secondary field, not the primary key.
 - `from_email`: lowercased, parsed from `Name <email>` envelope.
-- `text_body`: HTML stripped to text, `<style>`/`<script>` removed, quoted history (`On … wrote:`) and signature separators (`--`) stripped where safe, capped at 16000 chars. Treated as **UNTRUSTED DATA**.
+- `text_body`: HTML stripped to text (comments, `<style>`/`<script>` removed; `<br>` and closing block tags become line breaks first), quoted history (`On … wrote:`) and signature separators (`--`) stripped where safe, capped at 16000 chars. Treated as **UNTRUSTED DATA**.
 - `attachment_metadata`: filename, mimeType, size only — never parsed in the core. Attachments over 10MB are flagged as oversized.
 - `source_link`: Gmail thread URL when a thread_id exists.
 - `list_unsubscribe` (optional): the raw `List-Unsubscribe` header when the adapter can read it; used only by the newsletter rule.
@@ -78,7 +78,7 @@ reported_at, retention_expires_at, last_error_code
 
 Additional operational fields used by the workflows: `correlation_id`,
 `idempotency_key`, `from_name`, `from_email`, `subject`, `text_body`,
-`source_link`, and `retention_status`.
+`source_link`, `retention_status`, and `summary` (long text: the AI summary from P2-02, written by the P2-01 final-state update and cleared by P2-05).
 
 ### State semantics
 
@@ -90,7 +90,7 @@ Additional operational fields used by the workflows: `correlation_id`,
 | `alert_id` | `""` → sent alert message id | P2-03 after the urgent alert is sent; when set, P2-03 skips the alert so a replay does not alert twice |
 | `reported_at` | `""` → ISO-8601 | P2-04 **only after** successful brief delivery |
 | `retention_expires_at` | ISO-8601 | P2-01 at intake (`received_at + 30 days`) |
-| `retention_status` | `""` → `redacted` | P2-05 after raw body removal |
+| `retention_status` | `""` → `redacted` | P2-05 after clearing `text_body` and `summary`; `processing_status` is left unchanged and redacted rows are not selected again |
 | `last_error_code` | string | P2-03 on Asana/task failure |
 
 ### External-write state rule
@@ -147,7 +147,7 @@ Base: `REPLACE-AIRTABLE-BASE-ID` ("Portfolio Automation OS").
 - Workspace `REPLACE-ASANA-WORKSPACE-ID`, project `REPLACE-ASANA-PROJECT-ID` (Portfolio Automation Delivery).
 - Task name: `[msg:<message_id>] <category>: <subject>` — the Message-ID-derived prefix is the task idempotency marker so reruns cannot duplicate tasks.
 - Task notes include: source link, mailbox, correlation ID, message ID, category, importance, confidence, summary, and the draft reply (marked "review before sending").
-- `due_on` set from `suggested_due_at` when present.
+- `due_on` set from `suggested_due_at` when present. P2-02 normalises `suggested_due_at` to Asia/Kolkata (`+05:30`) and sets it to null when it cannot be parsed, is before the received time, or falls on a weekday the email does not mention (`due_date_check`).
 - Authentication: `accessToken` via verified Asana credential `REPLACE-ASANA-CREDENTIAL-ID`.
 
 ## 7. Notification contracts
