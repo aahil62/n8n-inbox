@@ -232,7 +232,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const plan = $('Prepare Handoff Plan').item.json;\nconst optionalFirstJson = (name) => {\n  try { return $(name).first().json || {}; }\n  catch { return {}; }\n};\nconst draft = optionalFirstJson('Create Gmail Draft');\nconst task = optionalFirstJson('Create Asana Task');\nconst alert = optionalFirstJson('Send Urgent Alert');\nconst draftId = String(draft.id || draft.draftId || draft.data?.id || plan.existing_draft_id || '');\nconst draftError = plan.create_draft && !draftId ? String(draft.error?.message || draft.error || 'gmail_draft_create_failed') : '';\nconst taskId = String(task.gid || task.id || task.data?.gid || task.data?.id || plan.existing_task_id || '');\nconst taskError = plan.create_task && !taskId ? String(task.error?.message || task.error || 'asana_create_failed') : '';\nconst alertId = String(alert.id || alert.messageId || alert.threadId || plan.existing_alert_id || '');\nconst alertError = plan.send_alert && !alertId ? String(alert.error?.message || alert.error || 'urgent_alert_send_failed') : '';\nconst errorCode = taskError || draftError || alertError;\nconst failedStage = taskError ? 'asana_task_create' : (draftError ? 'gmail_draft_create' : (alertError ? 'urgent_alert_send' : ''));\nreturn [{ json: {\n  correlation_id: plan.correlation_id,\n  message_id: plan.message_id,\n  email_event_id: plan.email_event_id,\n  draft_id: draftId,\n  draft_error: draftError,\n  task_id: taskId,\n  task_status: taskError ? 'failed' : (taskId ? 'synced' : 'not_applicable'),\n  task_error_code: taskError,\n  alert_sent: !!alertId,\n  alert_id: alertId,\n  alert_error: alertError,\n  review_required: plan.review_required,\n  review_queue_id: plan.review_queue_id || '',\n  handoff_failed: !!errorCode,\n  error_code: errorCode,\n  failed_stage: failedStage\n} }];"
+        "jsCode": "const plan = $('Prepare Handoff Plan').item.json;\nconst optionalFirstJson = (name) => {\n  try { return $(name).first().json || {}; }\n  catch { return {}; }\n};\nconst draft = optionalFirstJson('Create Gmail Draft');\nconst task = optionalFirstJson('Create Asana Task');\nconst alert = optionalFirstJson('Send Urgent Alert');\nconst draftId = String(draft.id || draft.draftId || draft.data?.id || plan.existing_draft_id || '');\nconst draftError = plan.create_draft && !draftId ? String(draft.error?.message || draft.error || 'gmail_draft_create_failed') : '';\nconst taskId = String(task.gid || task.id || task.data?.gid || task.data?.id || plan.existing_task_id || '');\nconst taskError = plan.create_task && !taskId ? String(task.error?.message || task.error || 'asana_create_failed') : '';\nconst alertId = String(alert.id || alert.messageId || alert.threadId || plan.existing_alert_id || '');\nconst alertError = plan.send_alert && !alertId ? String(alert.error?.message || alert.error || 'urgent_alert_send_failed') : '';\nconst errorCode = taskError || draftError || alertError;\nconst failedStage = taskError ? 'asana_task_create' : (draftError ? 'gmail_draft_create' : (alertError ? 'urgent_alert_send' : ''));\n// A Gmail login problem (expired/revoked token, 401/403) breaks drafts and alerts for every email, so flag it separately.\nconst gmailAuthPattern = /invalid_grant|invalid_client|authorization grant|refresh token|token has been expired or revoked|client authentication failed|invalid credentials|unauthori[sz]ed|\\b40[13]\\b/i;\nconst gmailErrorText = [draftError, alertError].filter(Boolean).join(' | ');\nconst gmailAuthFailed = gmailAuthPattern.test(gmailErrorText);\nreturn [{ json: {\n  correlation_id: plan.correlation_id,\n  message_id: plan.message_id,\n  email_event_id: plan.email_event_id,\n  draft_id: draftId,\n  draft_error: draftError,\n  task_id: taskId,\n  task_status: taskError ? 'failed' : (taskId ? 'synced' : 'not_applicable'),\n  task_error_code: taskError,\n  alert_sent: !!alertId,\n  alert_id: alertId,\n  alert_error: alertError,\n  review_required: plan.review_required,\n  review_queue_id: plan.review_queue_id || '',\n  handoff_failed: !!errorCode,\n  error_code: errorCode,\n  failed_stage: failedStage,\n  gmail_auth_failed: gmailAuthFailed,\n  gmail_auth_error: gmailAuthFailed ? gmailErrorText.slice(0, 500) : ''\n} }];"
       },
       "id": "p2-handoff-capture",
       "name": "Capture Handoff Results",
@@ -255,7 +255,65 @@
           },
           "conditions": [
             {
-              "leftValue": "={{ $json.handoff_failed }}",
+              "leftValue": "={{ $('Capture Handoff Results').item.json.gmail_auth_failed }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "p2-handoff-gmail-auth-if",
+      "name": "Gmail Auth Failed?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1390,
+        -300
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "accessToken",
+        "resource": "task",
+        "operation": "create",
+        "workspace": "REPLACE-ASANA-WORKSPACE-ID",
+        "name": "={{ '[ALERT][CRITICAL] Gmail login failed — reconnect the Gmail credential in n8n' }}",
+        "otherProperties": {
+          "projects": [
+            "REPLACE-ASANA-PROJECT-ID"
+          ],
+          "notes": "={{ 'The P2 handoff could not use Gmail because of a login/authorization error. Drafts and urgent alerts will fail for every email until the Gmail credential is reconnected in n8n (Credentials > Gmail > Reconnect).\\n\\nError: ' + $('Capture Handoff Results').item.json.gmail_auth_error + '\\nFailed stage: ' + ($('Capture Handoff Results').item.json.failed_stage || 'gmail') + '\\nMessage-ID: ' + $('Capture Handoff Results').item.json.message_id + '\\nCorrelation ID: ' + $('Capture Handoff Results').item.json.correlation_id + '\\n\\nAfter reconnecting, replay the dead-letter row for this message.' }}"
+        }
+      },
+      "id": "p2-handoff-gmail-auth-alert",
+      "name": "Create Gmail Auth Alert Task",
+      "type": "n8n-nodes-base.asana",
+      "typeVersion": 1,
+      "position": [
+        1500,
+        -420
+      ],
+      "onError": "continueRegularOutput",
+      "notes": "Alerts through Asana, not Gmail, because the Gmail credential is the thing that failed. One task per affected email; repeated tasks mean the login is still broken."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $('Capture Handoff Results').item.json.handoff_failed }}",
               "rightValue": "",
               "operator": {
                 "type": "boolean",
@@ -610,7 +668,7 @@
       "main": [
         [
           {
-            "node": "Handoff Failed?",
+            "node": "Gmail Auth Failed?",
             "type": "main",
             "index": 0
           }
@@ -691,6 +749,35 @@
         [
           {
             "node": "Return Handoff Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gmail Auth Failed?": {
+      "main": [
+        [
+          {
+            "node": "Create Gmail Auth Alert Task",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Handoff Failed?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Gmail Auth Alert Task": {
+      "main": [
+        [
+          {
+            "node": "Handoff Failed?",
             "type": "main",
             "index": 0
           }
