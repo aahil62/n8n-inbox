@@ -101,7 +101,7 @@
         "emailType": "text",
         "message": "={{ $json.brief_text }}",
         "options": {
-          "REPLACE-AIRTABLE-BASE-ID": false
+          "appendAttribution": false
         }
       },
       "id": "p2-brief-send",

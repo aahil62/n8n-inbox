@@ -150,7 +150,7 @@
         "emailType": "text",
         "message": "={{ $json.report_text }}",
         "options": {
-          "REPLACE-AIRTABLE-BASE-ID": false
+          "appendAttribution": false
         }
       },
       "id": "p2-sweep-send-report",

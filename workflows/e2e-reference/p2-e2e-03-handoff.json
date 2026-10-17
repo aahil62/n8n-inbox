@@ -216,7 +216,7 @@
         "emailType": "text",
         "message": "={{ 'Urgent inbox item\\n\\nFrom: ' + $('Prepare Handoff Plan').item.json.from_name + ' <' + $('Prepare Handoff Plan').item.json.from_email + '>\\nCategory: ' + $('Prepare Handoff Plan').item.json.category + '\\nImportance: ' + $('Prepare Handoff Plan').item.json.importance + '\\nSummary: ' + $('Prepare Handoff Plan').item.json.summary + '\\nSource: ' + ($('Prepare Handoff Plan').item.json.source_link || 'n/a') + '\\nCorrelation ID: ' + $('Prepare Handoff Plan').item.json.correlation_id }}",
         "options": {
-          "REPLACE-AIRTABLE-BASE-ID": false
+          "appendAttribution": false
         }
       },
       "id": "p2-handoff-urgent-alert",
