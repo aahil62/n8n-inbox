@@ -8,7 +8,7 @@ The workflow JSON is sanitized, parses successfully, has no credential blocks, c
 
 ## Not yet claimed
 
-Seven of the 15 end-to-end scenarios have passed (P2-E2E-001, 004, 005, 006, 007, 010, 011) and one passed in part (P2-E2E-002: in one of two regression runs on 17 October the model rated the normal email high priority, so an urgent alert was sent). P2-E2E-004 and 011 passed on re-test after the newsletter-rule and handoff-replay fixes; the Asana-failure replay is still a manual re-invocation, not an automated replay workflow. The remaining 7 scenarios and the labeled 40-message evaluation set have not been run live as a complete production gate.
+Eight of the 15 end-to-end scenarios have passed (P2-E2E-001, 002, 004, 005, 006, 007, 010, 011). P2-E2E-002 passed after the urgent-alert rule was changed on 17 October so an alert needs a high AI rating plus a deterministic urgency signal (keyword or VIP sender); 3 of 3 re-test runs sent no alert, including one where the model rated the email high. P2-E2E-004 and 011 passed on re-test after the newsletter-rule and handoff-replay fixes; the Asana-failure replay is still a manual re-invocation, not an automated replay workflow. The remaining 7 scenarios and the labeled 40-message evaluation set have not been run live as a complete production gate.
 
 Do not describe the package as fully production-ready until the documented matrix passes against the target client's real field configuration and rate limits.
 

@@ -85,7 +85,7 @@ Replaying the normal email returned the original draft and task IDs. No second d
 
 ## What's been tested
 
-Testing used a sandbox on 24–25 July and 17 October 2026 with fictional data, a Gmail test mailbox, Airtable, Asana, n8n, and a Groq-hosted model through an OpenAI-compatible endpoint. Seven of 15 scenarios passed, one passed in part, and seven haven't been run live yet.
+Testing used a sandbox on 24–25 July and 17 October 2026 with fictional data, a Gmail test mailbox, Airtable, Asana, n8n, and a Groq-hosted model through an OpenAI-compatible endpoint. Eight of 15 scenarios passed and seven haven't been run live yet.
 
 | Status | Scenario |
 |---|---|
@@ -96,7 +96,7 @@ Testing used a sandbox on 24–25 July and 17 October 2026 with fictional data, 
 | ✅ Passed live | AI model failure → review queue, no draft or task; replay creates nothing new |
 | ✅ Passed live | Newsletter → caught by the fixed newsletter rule (unsubscribe footer), low priority, no draft or task |
 | ✅ Passed live | Asana failure → draft kept, task marked failed, retryable dead-letter entry. A manual replay created the task with no second draft or alert, marked the email completed and the dead-letter entry resolved |
-| ⚠️ Partly passed | Normal client email → reviewable Gmail draft + Asana task. In one of two re-test runs the AI rated it high priority and an urgent alert was also sent |
+| ✅ Passed live | Normal client email → reviewable Gmail draft, no urgent alert. Passed 3 of 3 runs after the alert rule was tightened, including one run where the AI rated it high priority (an earlier run had sent an alert) |
 | 🧪 Test case written, not yet run live | Informational email, malformed HTML, attachment, daily-brief failure, timezone boundary, thread follow-up, retention sweep |
 | 🧪 Prepared, not yet run | 40 hand-labelled emails across 7 categories, including 6 sensitive and 3 prompt-injection cases. The pass bar is that all 6 sensitive emails are caught. |
 
@@ -105,7 +105,8 @@ Fixtures are in [`fixtures/`](fixtures). Expected and actual results are in the 
 **Current limits:**
 - The urgent-alert channel is a placeholder to connect to your Slack, SMS or email. The test build sent it as a Gmail message.
 - Retrying a failed Asana task is a manual step for now.
-- Whether an email gets an urgent alert depends on the AI's priority rating, which varied between runs for a borderline email.
+- An urgent alert needs both a high AI rating and an urgency keyword (or a VIP sender). A truly urgent email that uses none of the keywords gets a draft and task but no alert, so the keyword list should be tuned per business.
+- The AI's priority and "needs a task" ratings still vary between runs for borderline emails.
 - Attachments are recorded but not read.
 - Full thread history isn't fetched; the thread ID and source link are kept.
 
