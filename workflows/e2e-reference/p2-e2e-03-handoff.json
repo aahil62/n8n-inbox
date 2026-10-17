@@ -49,7 +49,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const raw = $('On Handoff Request').item.json;\nconst j = { ...raw, ...(raw.triage || {}) };\nconst rec = $('Load email_events State').first().json || {};\nconst ef = rec.fields || rec;\nconst existingDraftId = String(ef.draft_id || '');\nconst existingTaskId = String(ef.task_id || '');\nconst reviewRequired = !!j.review_required;\nconst accepted = !reviewRequired;\nconst createDraft = accepted && !!j.needs_reply && !existingDraftId;\nconst createTask = accepted && !!j.needs_task && !existingTaskId;\nconst urgentConfig = { importance: 'high', categories: ['client_request', 'billing'] };\nconst sendAlert = accepted && j.importance === urgentConfig.importance && urgentConfig.categories.includes(j.category);\nreturn [{ json: {\n  ...j,\n  existing_draft_id: existingDraftId,\n  existing_task_id: existingTaskId,\n  create_draft: createDraft,\n  create_task: createTask,\n  send_alert: sendAlert,\n  task_idempotency_key: j.message_id ? 'msg:' + j.message_id : j.idempotency_key\n}}];"
+        "jsCode": "const raw = $('On Handoff Request').item.json;\nconst j = { ...raw, ...(raw.triage || {}) };\nconst rec = $('Load email_events State').first().json || {};\nconst ef = rec.fields || rec;\nconst existingDraftId = String(ef.draft_id || '');\nconst existingTaskId = String(ef.task_id || '');\nconst existingAlertId = String(ef.alert_id || '');\nconst reviewRequired = !!j.review_required;\nconst accepted = !reviewRequired;\nconst createDraft = accepted && !!j.needs_reply && !existingDraftId;\nconst createTask = accepted && !!j.needs_task && !existingTaskId;\nconst urgentConfig = { importance: 'high', categories: ['client_request', 'billing'] };\nconst sendAlert = accepted && j.importance === urgentConfig.importance && urgentConfig.categories.includes(j.category) && !existingAlertId;\nreturn [{ json: {\n  ...j,\n  existing_draft_id: existingDraftId,\n  existing_task_id: existingTaskId,\n  existing_alert_id: existingAlertId,\n  create_draft: createDraft,\n  create_task: createTask,\n  send_alert: sendAlert,\n  task_idempotency_key: j.message_id ? 'msg:' + j.message_id : j.idempotency_key\n}}];"
       },
       "id": "p2-handoff-plan",
       "name": "Prepare Handoff Plan",
@@ -59,7 +59,7 @@
         -260,
         0
       ],
-      "notes": "Determines which side effects to create. Review_required items get no draft, task, or alert (the review_queue record from P2-02 holds the draft for human review). Urgent alert only for configured urgent conditions (high importance + client_request/billing)."
+      "notes": "Determines which side effects to create. Review_required items get no draft, task, or alert (the review_queue record from P2-02 holds the draft for human review). Urgent alert only for configured urgent conditions (high importance + client_request/billing). An urgent alert is skipped when email_events already holds an alert_id, so a handoff replay does not alert twice."
     },
     {
       "parameters": {
@@ -232,7 +232,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const plan = $('Prepare Handoff Plan').item.json;\nconst optionalFirstJson = (name) => {\n  try { return $(name).first().json || {}; }\n  catch { return {}; }\n};\nconst draft = optionalFirstJson('Create Gmail Draft');\nconst task = optionalFirstJson('Create Asana Task');\nconst alert = optionalFirstJson('Send Urgent Alert');\nconst draftId = String(draft.id || draft.draftId || draft.data?.id || plan.existing_draft_id || '');\nconst draftError = plan.create_draft && !draftId ? String(draft.error?.message || draft.error || 'gmail_draft_create_failed') : '';\nconst taskId = String(task.gid || task.id || task.data?.gid || task.data?.id || plan.existing_task_id || '');\nconst taskError = plan.create_task && !taskId ? String(task.error?.message || task.error || 'asana_create_failed') : '';\nconst alertId = String(alert.id || alert.messageId || alert.threadId || '');\nconst alertError = plan.send_alert && !alertId ? String(alert.error?.message || alert.error || 'urgent_alert_send_failed') : '';\nconst errorCode = taskError || draftError || alertError;\nconst failedStage = taskError ? 'asana_task_create' : (draftError ? 'gmail_draft_create' : (alertError ? 'urgent_alert_send' : ''));\nreturn [{ json: {\n  correlation_id: plan.correlation_id,\n  message_id: plan.message_id,\n  email_event_id: plan.email_event_id,\n  draft_id: draftId,\n  draft_error: draftError,\n  task_id: taskId,\n  task_status: taskError ? 'failed' : (taskId ? 'synced' : 'not_applicable'),\n  task_error_code: taskError,\n  alert_sent: !!alertId,\n  alert_error: alertError,\n  review_required: plan.review_required,\n  review_queue_id: plan.review_queue_id || '',\n  handoff_failed: !!errorCode,\n  error_code: errorCode,\n  failed_stage: failedStage\n} }];"
+        "jsCode": "const plan = $('Prepare Handoff Plan').item.json;\nconst optionalFirstJson = (name) => {\n  try { return $(name).first().json || {}; }\n  catch { return {}; }\n};\nconst draft = optionalFirstJson('Create Gmail Draft');\nconst task = optionalFirstJson('Create Asana Task');\nconst alert = optionalFirstJson('Send Urgent Alert');\nconst draftId = String(draft.id || draft.draftId || draft.data?.id || plan.existing_draft_id || '');\nconst draftError = plan.create_draft && !draftId ? String(draft.error?.message || draft.error || 'gmail_draft_create_failed') : '';\nconst taskId = String(task.gid || task.id || task.data?.gid || task.data?.id || plan.existing_task_id || '');\nconst taskError = plan.create_task && !taskId ? String(task.error?.message || task.error || 'asana_create_failed') : '';\nconst alertId = String(alert.id || alert.messageId || alert.threadId || plan.existing_alert_id || '');\nconst alertError = plan.send_alert && !alertId ? String(alert.error?.message || alert.error || 'urgent_alert_send_failed') : '';\nconst errorCode = taskError || draftError || alertError;\nconst failedStage = taskError ? 'asana_task_create' : (draftError ? 'gmail_draft_create' : (alertError ? 'urgent_alert_send' : ''));\nreturn [{ json: {\n  correlation_id: plan.correlation_id,\n  message_id: plan.message_id,\n  email_event_id: plan.email_event_id,\n  draft_id: draftId,\n  draft_error: draftError,\n  task_id: taskId,\n  task_status: taskError ? 'failed' : (taskId ? 'synced' : 'not_applicable'),\n  task_error_code: taskError,\n  alert_sent: !!alertId,\n  alert_id: alertId,\n  alert_error: alertError,\n  review_required: plan.review_required,\n  review_queue_id: plan.review_queue_id || '',\n  handoff_failed: !!errorCode,\n  error_code: errorCode,\n  failed_stage: failedStage\n} }];"
       },
       "id": "p2-handoff-capture",
       "name": "Capture Handoff Results",
@@ -344,6 +344,8 @@
             "draft_id": "={{ $('Capture Handoff Results').item.json.draft_id }}",
             "task_id": "={{ $('Capture Handoff Results').item.json.task_id }}",
             "last_error_code": "={{ $('Capture Handoff Results').item.json.error_code }}",
+            "alert_id": "={{ $('Capture Handoff Results').item.json.alert_id }}",
+            "processing_status": "={{ $('Capture Handoff Results').item.json.review_required ? 'review_required' : ($('Capture Handoff Results').item.json.handoff_failed ? 'failed' : 'completed') }}",
             "id": "={{ $('Capture Handoff Results').first().json.email_event_id }}"
           },
           "matchingColumns": [
@@ -363,18 +365,122 @@
       ],
       "retryOnFail": true,
       "maxTries": 2,
-      "notes": "Writes draft_id and task_id to email_events only after the handoff returns. task_id is populated only when a verified Asana task ID exists."
+      "notes": "Writes draft_id and task_id to email_events only after the handoff returns. task_id is populated only when a verified Asana task ID exists. Also writes alert_id and processing_status (completed/failed), so a successful manual replay leaves the event completed."
     },
     {
       "parameters": {
-        "jsCode": "const c = $('Capture Handoff Results').item.json;\nlet finalStatus = 'handoff_complete';\nif (c.task_error_code) finalStatus = 'task_failed_other_actions_preserved';\nelse if (c.draft_error) finalStatus = 'draft_failed_other_actions_preserved';\nelse if (c.alert_error) finalStatus = 'alert_failed_other_actions_preserved';\nreturn [{ json: {\n  correlation_id: c.correlation_id,\n  message_id: c.message_id,\n  email_event_id: c.email_event_id,\n  draft_id: c.draft_id,\n  draft_error: c.draft_error,\n  task_id: c.task_id,\n  task_status: c.task_status,\n  task_error_code: c.task_error_code,\n  alert_sent: c.alert_sent,\n  alert_error: c.alert_error,\n  review_required: c.review_required,\n  review_queue_id: c.review_queue_id,\n  final_status: finalStatus\n}}];"
+        "authentication": "airtableTokenApi",
+        "resource": "record",
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "REPLACE-AIRTABLE-BASE-ID",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "REPLACE-DEAD-LETTER-TABLE-ID",
+          "mode": "id"
+        },
+        "filterByFormula": "={{ `AND({correlation_id} = \"${$('Capture Handoff Results').first().json.correlation_id}\", {project_id} = \"P2\", {status} = \"pending\", ${$('Capture Handoff Results').first().json.handoff_failed ? 'FALSE()' : 'TRUE()'})` }}",
+        "returnAll": true,
+        "options": {}
+      },
+      "id": "p2-handoff-find-dead-letters",
+      "name": "Find Pending Dead Letters",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        2160,
+        0
+      ],
+      "alwaysOutputData": true,
+      "notes": "After a successful handoff (for example a manual replay), finds this correlation ID's pending P2 dead-letter rows. Returns nothing when the handoff failed."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "exists",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "p2-handoff-has-dead-letter-if",
+      "name": "Pending Dead Letter?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        2380,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "airtableTokenApi",
+        "resource": "record",
+        "operation": "update",
+        "base": {
+          "__rl": true,
+          "value": "REPLACE-AIRTABLE-BASE-ID",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "REPLACE-DEAD-LETTER-TABLE-ID",
+          "mode": "id"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "status": "resolved",
+            "resolved_at": "={{ $now.toISO() }}",
+            "replay_execution_id": "={{ $execution.id }}",
+            "id": "={{ $json.id }}"
+          },
+          "matchingColumns": [
+            "id"
+          ],
+          "schema": []
+        },
+        "options": {}
+      },
+      "id": "p2-handoff-resolve-dead-letter",
+      "name": "Mark Dead Letter Resolved",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        2600,
+        -120
+      ],
+      "retryOnFail": true,
+      "notes": "Marks the dead-letter row resolved with the replay execution ID."
+    },
+    {
+      "parameters": {
+        "jsCode": "const c = $('Capture Handoff Results').first().json;\nlet finalStatus = 'handoff_complete';\nif (c.task_error_code) finalStatus = 'task_failed_other_actions_preserved';\nelse if (c.draft_error) finalStatus = 'draft_failed_other_actions_preserved';\nelse if (c.alert_error) finalStatus = 'alert_failed_other_actions_preserved';\nreturn [{ json: {\n  correlation_id: c.correlation_id,\n  message_id: c.message_id,\n  email_event_id: c.email_event_id,\n  draft_id: c.draft_id,\n  draft_error: c.draft_error,\n  task_id: c.task_id,\n  task_status: c.task_status,\n  task_error_code: c.task_error_code,\n  alert_sent: c.alert_sent,\n  alert_error: c.alert_error,\n  review_required: c.review_required,\n  review_queue_id: c.review_queue_id,\n  final_status: finalStatus\n}}];"
       },
       "id": "p2-handoff-return",
       "name": "Return Handoff Result",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        2160,
+        2820,
         0
       ]
     }
@@ -526,7 +632,7 @@
       "main": [
         [
           {
-            "node": "Return Handoff Result",
+            "node": "Find Pending Dead Letters",
             "type": "main",
             "index": 0
           }
@@ -545,6 +651,46 @@
         [
           {
             "node": "Update email_events Handoff State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find Pending Dead Letters": {
+      "main": [
+        [
+          {
+            "node": "Pending Dead Letter?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pending Dead Letter?": {
+      "main": [
+        [
+          {
+            "node": "Mark Dead Letter Resolved",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Return Handoff Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Dead Letter Resolved": {
+      "main": [
+        [
+          {
+            "node": "Return Handoff Result",
             "type": "main",
             "index": 0
           }
