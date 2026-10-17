@@ -43,6 +43,31 @@ an exported ID blindly.
 Credentials belong in n8n's encrypted credential store. Never paste a token
 into a Set, Edit Fields, Code, or HTTP-header text field.
 
+### Keep the Gmail login from expiring
+
+Google expires refresh tokens after 7 days while an OAuth app's publishing
+status is **Testing**. The sandbox lost its Gmail connection this way during
+testing. Before the workflow watches a real inbox:
+
+1. Open the [Google Cloud console](https://console.cloud.google.com/) and select
+   the project that owns the OAuth client used by the n8n Gmail credential.
+2. Go to **Google Auth Platform → Audience** (older console: **APIs & Services →
+   OAuth consent screen**).
+3. If the mailbox is in a Google Workspace domain and only that domain will use
+   it, set **User type** to **Internal**; internal apps are not subject to the
+   7-day limit.
+4. Otherwise, under **Publishing status: Testing**, click **Publish app** and
+   confirm, so the status reads **In production**. Gmail scopes are restricted,
+   so Google may show an "unverified app" warning or ask for verification if the
+   app is used beyond your own accounts.
+5. In n8n, open **Credentials → Gmail account → Reconnect** and sign in again.
+   Tokens issued while the app was in Testing keep their 7-day limit, so this
+   reconnect is required.
+
+If the login still fails later, the handoff creates an Asana task
+`[ALERT][CRITICAL] Gmail login failed — reconnect the Gmail credential in n8n`
+and writes a dead-letter row for each affected email.
+
 ## Resource mapping
 
 Create the Airtable email-events, review-queue, execution-audit, and dead-letter tables. Configure the Gmail mailbox, Asana project, owner-notification address, and model credential. Slack remains an optional unverified reference adapter.

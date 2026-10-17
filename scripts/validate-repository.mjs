@@ -52,7 +52,8 @@ for (const relative of expectedWorkflows) {
   if (workflow.active !== false) fail(`${relative} is not inactive`);
   if (workflow.id || workflow.versionId) fail(`${relative} contains an account-specific workflow ID`);
   if (secretPattern.test(raw)) fail(`${relative} contains a secret-like value`);
-  if (privateIdPattern.test(raw)) fail(`${relative} contains a known private resource ID`);
+  // n8n's Gmail option name "appendAttribution" looks like an Airtable base ID (app + 14 letters).
+  if (privateIdPattern.test(raw.replaceAll('"appendAttribution"', ''))) fail(`${relative} contains a known private resource ID`);
   if (productionWebhookPattern.test(raw)) fail(`${relative} contains an explicit webhook URL`);
   for (const match of raw.matchAll(/REPLACE-[A-Z0-9-]+/g)) placeholdersInWorkflows.add(match[0]);
 
@@ -133,7 +134,7 @@ function scanPublicText(dir) {
     else if (textExtensions.has(path.extname(entry.name))) {
       const raw = fs.readFileSync(full, "utf8");
       if (secretPattern.test(raw)) fail(`${path.relative(root, full)} contains a secret-like value`);
-      if (privateTextPattern.test(raw)) fail(`${path.relative(root, full)} contains a private identifier`);
+      if (privateTextPattern.test(raw.replaceAll('"appendAttribution"', ''))) fail(`${path.relative(root, full)} contains a private identifier`);
       if (privateEmailPattern.test(raw)) fail(`${path.relative(root, full)} contains a private email address`);
     }
   }
